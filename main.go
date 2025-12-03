@@ -54,6 +54,7 @@ func main() {
 		_, _ = fmt.Fprintf(w, "  p              Toggle preview\n")
 		_, _ = fmt.Fprintf(w, "  /              Enter filter mode\n")
 		_, _ = fmt.Fprintf(w, "  Esc            Exit filter mode / clear filter\n")
+		_, _ = fmt.Fprintf(w, "  y              Yank (copy) selected line\n")
 	}
 
 	flag.Usage = func() {

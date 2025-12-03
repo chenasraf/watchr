@@ -176,6 +176,7 @@ Configuration values are applied in this order (later sources override earlier o
 | `p`                | Toggle preview pane             |
 | `/`                | Enter filter mode               |
 | `Esc`              | Exit filter mode / clear filter |
+| `y`                | Yank (copy) selected line       |
 
 ---
 

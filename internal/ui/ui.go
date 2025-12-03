@@ -3,6 +3,8 @@ package ui
 import (
 	"context"
 	"fmt"
+	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -51,14 +53,40 @@ type model struct {
 	cancel      context.CancelFunc
 	loading     bool
 	errorMsg    string
+	statusMsg   string // temporary status message (e.g., "Yanked!")
 }
 
 // messages
 type linesMsg []runner.Line
 type errMsg struct{ err error }
 type tickMsg time.Time
+type clearStatusMsg struct{}
 
 func (e errMsg) Error() string { return e.err.Error() }
+
+// copyToClipboard copies text to the system clipboard using OS-specific commands
+func copyToClipboard(text string) error {
+	var cmd *exec.Cmd
+
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("pbcopy")
+	case "linux":
+		// Try xclip first, fall back to xsel
+		if _, err := exec.LookPath("xclip"); err == nil {
+			cmd = exec.Command("xclip", "-selection", "clipboard")
+		} else {
+			cmd = exec.Command("xsel", "--clipboard", "--input")
+		}
+	case "windows":
+		cmd = exec.Command("clip")
+	default:
+		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+	}
+
+	cmd.Stdin = strings.NewReader(text)
+	return cmd.Run()
+}
 
 func initialModel(cfg Config) model {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -122,6 +150,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case errMsg:
 		m.errorMsg = msg.Error()
 		m.loading = false
+		return m, nil
+
+	case clearStatusMsg:
+		m.statusMsg = ""
 		return m, nil
 	}
 
@@ -196,6 +228,22 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "/":
 		m.filterMode = true
 		m.filter = ""
+	case "y":
+		// Yank (copy) selected line to clipboard
+		if len(m.filtered) > 0 && m.cursor >= 0 && m.cursor < len(m.filtered) {
+			idx := m.filtered[m.cursor]
+			if idx < len(m.lines) {
+				content := m.lines[idx].Content
+				if err := copyToClipboard(content); err != nil {
+					m.statusMsg = "Failed to copy"
+				} else {
+					m.statusMsg = "Copied to clipboard"
+				}
+				return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
+					return clearStatusMsg{}
+				})
+			}
+		}
 	}
 
 	return m, nil
@@ -425,7 +473,7 @@ func (m model) View() string {
 	}
 
 	// Build header content
-	header := headerTextStyle.Render("r reload • q quit • j/k move • g/G first/last • ^d/u/f/b scroll • p preview • / filter")
+	header := headerTextStyle.Render("r reload • q quit • j/k move • g/G first/last • ^d/u/f/b scroll • p preview • / filter • y yank")
 	commandLine := fmt.Sprintf("Command: %s", m.config.Command)
 
 	// Build prompt line (will go at bottom)
@@ -439,6 +487,10 @@ func (m model) View() string {
 	}
 	if m.loading {
 		promptLine += " [loading...]"
+	}
+	if m.statusMsg != "" {
+		statusStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // green
+		promptLine += " " + statusStyle.Render(m.statusMsg)
 	}
 
 	// Calculate layout

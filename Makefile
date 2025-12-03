@@ -1,12 +1,14 @@
+BIN := $(notdir $(CURDIR))
+
 all: run
 
 .PHONY: build
 build:
-	go build
+	go build -o $(BIN)
 
 .PHONY: run
 run: build
-	./watchr
+	./$(BIN)
 
 .PHONY: test
 test:
@@ -14,11 +16,11 @@ test:
 
 .PHONY: install
 install: build
-	cp watchr ~/.local/bin
+	cp $(BIN) ~/.local/bin/
 
 .PHONY: uninstall
 uninstall:
-	rm -f ~/.local/bin/watchr
+	rm -f ~/.local/bin/$(BIN)
 
 .PHONY: precommit-install
 precommit-install:
@@ -33,6 +35,7 @@ precommit:
 	if [ -z "$$STAGED_FILES" ]; then \
 		echo "No staged Go files to check."; \
 	else \
+		set -e; \
 		echo "Running pre-commit checks..."; \
 		echo "go fmt"; \
 		go fmt ./...; \

@@ -21,10 +21,8 @@ const (
 	KeyRefresh         = "refresh"
 )
 
-// Init initializes Viper with config file paths and defaults.
-// Should be called before flag.Parse().
-func Init() {
-	// Set defaults
+// setDefaults sets the default configuration values.
+func setDefaults() {
 	viper.SetDefault(KeyShell, "sh")
 	viper.SetDefault(KeyPreviewSize, "40%")
 	viper.SetDefault(KeyPreviewPosition, "bottom")
@@ -32,6 +30,11 @@ func Init() {
 	viper.SetDefault(KeyLineWidth, 6)
 	viper.SetDefault(KeyPrompt, "watchr> ")
 	viper.SetDefault(KeyRefresh, 0)
+}
+
+// Init initializes Viper with config file paths and defaults.
+func Init() {
+	setDefaults()
 
 	// Config file name (without extension)
 	viper.SetConfigName("watchr")
@@ -48,6 +51,17 @@ func Init() {
 
 	// Try to read config file (errors are ignored if file doesn't exist)
 	_ = viper.ReadInConfig()
+}
+
+// InitWithFile initializes Viper with a specific config file path.
+func InitWithFile(path string) error {
+	setDefaults()
+
+	viper.SetConfigFile(path)
+	if err := viper.ReadInConfig(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // BindFlags binds pflags to Viper. Should be called after flag definitions

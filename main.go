@@ -16,19 +16,18 @@ import (
 var version string
 
 func main() {
-	// Initialize config (loads config files and sets defaults)
-	config.Init()
-
 	var (
 		showVersion bool
 		showHelp    bool
 		showConfig  bool
+		configFile  string
 	)
 
 	// Define flags (defaults shown in help, but actual defaults come from config)
 	flag.BoolVarP(&showVersion, "version", "v", false, "Show version")
 	flag.BoolVarP(&showHelp, "help", "h", false, "Show help")
 	flag.BoolVarP(&showConfig, "show-config", "C", false, "Show loaded configuration and exit")
+	flag.StringVarP(&configFile, "config", "c", "", "Load config from specified path")
 	flag.StringP("preview-size", "P", "40%", "Preview size: number for lines/cols, or number% for percentage (e.g., 10 or 40%)")
 	flag.StringP("preview-position", "o", "bottom", "Preview position: bottom, top, left, right")
 	flag.BoolP("no-line-numbers", "n", false, "Disable line numbers")
@@ -62,6 +61,16 @@ func main() {
 	}
 
 	flag.Parse()
+
+	// Initialize config (loads config files and sets defaults)
+	if configFile != "" {
+		if err := config.InitWithFile(configFile); err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading config file: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		config.Init()
+	}
 
 	// Bind flags to config (CLI flags override config file values)
 	config.BindFlags(flag.CommandLine)

@@ -272,3 +272,165 @@ func TestGetConfigDir(t *testing.T) {
 		t.Logf("getConfigDir returned: %s", dir)
 	}
 }
+
+func TestInitWithFile(t *testing.T) {
+	_, cleanup := isolateConfig(t)
+	defer cleanup()
+
+	// Create a config file
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "custom.yaml")
+	configContent := `shell: fish
+preview-size: "75%"
+preview-position: left
+line-numbers: false
+line-width: 8
+prompt: "custom> "
+refresh: 10
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	// Initialize with specific file
+	if err := InitWithFile(configPath); err != nil {
+		t.Fatalf("InitWithFile failed: %v", err)
+	}
+
+	// Check values from config file
+	if got := GetString(KeyShell); got != "fish" {
+		t.Errorf("expected shell 'fish', got %q", got)
+	}
+
+	if got := GetString(KeyPreviewSize); got != "75%" {
+		t.Errorf("expected preview-size '75%%', got %q", got)
+	}
+
+	if got := GetString(KeyPreviewPosition); got != "left" {
+		t.Errorf("expected preview-position 'left', got %q", got)
+	}
+
+	if got := GetBool(KeyLineNumbers); got != false {
+		t.Errorf("expected line-numbers false, got %v", got)
+	}
+
+	if got := GetInt(KeyLineWidth); got != 8 {
+		t.Errorf("expected line-width 8, got %d", got)
+	}
+
+	if got := GetString(KeyPrompt); got != "custom> " {
+		t.Errorf("expected prompt 'custom> ', got %q", got)
+	}
+
+	if got := GetInt(KeyRefresh); got != 10 {
+		t.Errorf("expected refresh 10, got %d", got)
+	}
+
+	// ConfigFileUsed should return the specified path
+	if used := ConfigFileUsed(); used != configPath {
+		t.Errorf("expected ConfigFileUsed() = %q, got %q", configPath, used)
+	}
+}
+
+func TestInitWithFileNotFound(t *testing.T) {
+	_, cleanup := isolateConfig(t)
+	defer cleanup()
+
+	err := InitWithFile("/nonexistent/path/config.yaml")
+	if err == nil {
+		t.Error("expected error for nonexistent file, got nil")
+	}
+}
+
+func TestInitWithFileTOML(t *testing.T) {
+	_, cleanup := isolateConfig(t)
+	defer cleanup()
+
+	// Create a TOML config file
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.toml")
+	configContent := `shell = "zsh"
+preview-size = "50%"
+preview-position = "top"
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	if err := InitWithFile(configPath); err != nil {
+		t.Fatalf("InitWithFile failed for TOML: %v", err)
+	}
+
+	if got := GetString(KeyShell); got != "zsh" {
+		t.Errorf("expected shell 'zsh', got %q", got)
+	}
+
+	if got := GetString(KeyPreviewPosition); got != "top" {
+		t.Errorf("expected preview-position 'top', got %q", got)
+	}
+}
+
+func TestInitWithFileJSON(t *testing.T) {
+	_, cleanup := isolateConfig(t)
+	defer cleanup()
+
+	// Create a JSON config file
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.json")
+	configContent := `{
+  "shell": "bash",
+  "preview-size": "30%",
+  "preview-position": "right"
+}`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	if err := InitWithFile(configPath); err != nil {
+		t.Fatalf("InitWithFile failed for JSON: %v", err)
+	}
+
+	if got := GetString(KeyShell); got != "bash" {
+		t.Errorf("expected shell 'bash', got %q", got)
+	}
+
+	if got := GetString(KeyPreviewSize); got != "30%" {
+		t.Errorf("expected preview-size '30%%', got %q", got)
+	}
+}
+
+func TestInitWithFileDefaults(t *testing.T) {
+	_, cleanup := isolateConfig(t)
+	defer cleanup()
+
+	// Create a config file with only some values
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "partial.yaml")
+	configContent := `shell: fish
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	if err := InitWithFile(configPath); err != nil {
+		t.Fatalf("InitWithFile failed: %v", err)
+	}
+
+	// Specified value should be loaded
+	if got := GetString(KeyShell); got != "fish" {
+		t.Errorf("expected shell 'fish', got %q", got)
+	}
+
+	// Unspecified values should use defaults
+	if got := GetString(KeyPreviewSize); got != "40%" {
+		t.Errorf("expected default preview-size '40%%', got %q", got)
+	}
+
+	if got := GetString(KeyPreviewPosition); got != "bottom" {
+		t.Errorf("expected default preview-position 'bottom', got %q", got)
+	}
+
+	if got := GetInt(KeyLineWidth); got != 6 {
+		t.Errorf("expected default line-width 6, got %d", got)
+	}
+}

@@ -36,28 +36,34 @@ func main() {
 	flag.StringVarP(&shell, "shell", "s", "sh", "Shell to use for executing commands")
 	flag.IntVarP(&refreshSeconds, "refresh", "r", 0, "Auto-refresh interval in seconds (0 = disabled)")
 
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: watchr [options] <command to run>\n\n")
-		fmt.Fprintf(os.Stderr, "A terminal UI for running and watching command output.\n\n")
-		fmt.Fprintf(os.Stderr, "Options:\n")
+	printUsage := func(w *os.File) {
+		fmt.Fprintf(w, "Usage: watchr [options] <command to run>\n\n")
+		fmt.Fprintf(w, "A terminal UI for running and watching command output.\n\n")
+		fmt.Fprintf(w, "Options:\n")
+		flag.CommandLine.SetOutput(w)
 		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "\nKeybindings:\n")
-		fmt.Fprintf(os.Stderr, "  r, Ctrl-r      Reload (re-run command)\n")
-		fmt.Fprintf(os.Stderr, "  q, Esc         Quit\n")
-		fmt.Fprintf(os.Stderr, "  j, k           Move down/up\n")
-		fmt.Fprintf(os.Stderr, "  g              Go to first line\n")
-		fmt.Fprintf(os.Stderr, "  G              Go to last line\n")
-		fmt.Fprintf(os.Stderr, "  Ctrl-d/u       Half page down/up\n")
-		fmt.Fprintf(os.Stderr, "  PgDn/Up, ^f/b  Full page down/up\n")
-		fmt.Fprintf(os.Stderr, "  p              Toggle preview\n")
-		fmt.Fprintf(os.Stderr, "  /              Enter filter mode\n")
-		fmt.Fprintf(os.Stderr, "  Esc            Exit filter mode / clear filter\n")
+		flag.CommandLine.SetOutput(os.Stderr)
+		fmt.Fprintf(w, "\nKeybindings:\n")
+		fmt.Fprintf(w, "  r, Ctrl-r      Reload (re-run command)\n")
+		fmt.Fprintf(w, "  q, Esc         Quit\n")
+		fmt.Fprintf(w, "  j, k           Move down/up\n")
+		fmt.Fprintf(w, "  g              Go to first line\n")
+		fmt.Fprintf(w, "  G              Go to last line\n")
+		fmt.Fprintf(w, "  Ctrl-d/u       Half page down/up\n")
+		fmt.Fprintf(w, "  PgDn/Up, ^f/b  Full page down/up\n")
+		fmt.Fprintf(w, "  p              Toggle preview\n")
+		fmt.Fprintf(w, "  /              Enter filter mode\n")
+		fmt.Fprintf(w, "  Esc            Exit filter mode / clear filter\n")
+	}
+
+	flag.Usage = func() {
+		printUsage(os.Stderr)
 	}
 
 	flag.Parse()
 
 	if showHelp {
-		flag.Usage()
+		printUsage(os.Stdout)
 		os.Exit(0)
 	}
 

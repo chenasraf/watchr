@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/chenasraf/watchr/internal/config"
 	"github.com/chenasraf/watchr/internal/ui"
 	flag "github.com/spf13/pflag"
 )
@@ -15,27 +16,24 @@ import (
 var version string
 
 func main() {
+	// Initialize config (loads config files and sets defaults)
+	config.Init()
+
 	var (
-		showVersion     bool
-		showHelp        bool
-		previewSize     string
-		previewPosition string
-		noLineNumbers   bool
-		lineNumWidth    int
-		prompt          string
-		shell           string
-		refreshSeconds  int
+		showVersion bool
+		showHelp    bool
 	)
 
+	// Define flags (defaults shown in help, but actual defaults come from config)
 	flag.BoolVarP(&showVersion, "version", "v", false, "Show version")
 	flag.BoolVarP(&showHelp, "help", "h", false, "Show help")
-	flag.StringVarP(&previewSize, "preview-size", "P", "40%", "Preview size: number for lines/cols, or number% for percentage (e.g., 10 or 40%)")
-	flag.StringVarP(&previewPosition, "preview-position", "o", "bottom", "Preview position: bottom, top, left, right")
-	flag.BoolVarP(&noLineNumbers, "no-line-numbers", "n", false, "Disable line numbers")
-	flag.IntVarP(&lineNumWidth, "line-width", "w", 6, "Line number width")
-	flag.StringVarP(&prompt, "prompt", "p", "watchr> ", "Prompt string")
-	flag.StringVarP(&shell, "shell", "s", "sh", "Shell to use for executing commands")
-	flag.IntVarP(&refreshSeconds, "refresh", "r", 0, "Auto-refresh interval in seconds (0 = disabled)")
+	flag.StringP("preview-size", "P", "40%", "Preview size: number for lines/cols, or number% for percentage (e.g., 10 or 40%)")
+	flag.StringP("preview-position", "o", "bottom", "Preview position: bottom, top, left, right")
+	flag.BoolP("no-line-numbers", "n", false, "Disable line numbers")
+	flag.IntP("line-width", "w", 6, "Line number width")
+	flag.StringP("prompt", "p", "watchr> ", "Prompt string")
+	flag.StringP("shell", "s", "sh", "Shell to use for executing commands")
+	flag.IntP("refresh", "r", 0, "Auto-refresh interval in seconds (0 = disabled)")
 
 	printUsage := func(w *os.File) {
 		fmt.Fprintf(w, "Usage: watchr [options] <command to run>\n\n")
@@ -63,6 +61,9 @@ func main() {
 
 	flag.Parse()
 
+	// Bind flags to config (CLI flags override config file values)
+	config.BindFlags(flag.CommandLine)
+
 	if showHelp {
 		printUsage(os.Stdout)
 		os.Exit(0)
@@ -82,6 +83,15 @@ func main() {
 
 	cmdStr := strings.Join(args, " ")
 
+	// Get config values (merged from: defaults < config file < CLI flags)
+	previewSize := config.GetString(config.KeyPreviewSize)
+	previewPosition := config.GetString(config.KeyPreviewPosition)
+	shell := config.GetString(config.KeyShell)
+	lineNumWidth := config.GetInt(config.KeyLineWidth)
+	prompt := config.GetString(config.KeyPrompt)
+	refreshSeconds := config.GetInt(config.KeyRefresh)
+	showLineNums := config.ShowLineNumbers()
+
 	// Parse preview size (e.g., "40" for lines/cols, "40%" for percentage)
 	previewSizeIsPercent := strings.HasSuffix(previewSize, "%")
 	previewSizeStr := strings.TrimSuffix(previewSize, "%")
@@ -91,19 +101,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	config := ui.Config{
+	uiConfig := ui.Config{
 		Command:              cmdStr,
 		Shell:                shell,
 		PreviewSize:          previewSizeVal,
 		PreviewSizeIsPercent: previewSizeIsPercent,
 		PreviewPosition:      ui.PreviewPosition(previewPosition),
-		ShowLineNums:         !noLineNumbers,
+		ShowLineNums:         showLineNums,
 		LineNumWidth:         lineNumWidth,
 		Prompt:               prompt,
 		RefreshSeconds:       refreshSeconds,
 	}
 
-	if err := ui.Run(config); err != nil {
+	if err := ui.Run(uiConfig); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}

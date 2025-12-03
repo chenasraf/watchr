@@ -16,6 +16,7 @@ provides vim-style navigation, filtering, and a preview pane—all without leavi
 - **Preview pane**: Toggle a preview panel (bottom, top, left, or right)
 - **Auto-refresh**: Optionally re-run commands at specified intervals
 - **Line numbers**: Optional line numbering with configurable width
+- **Config files**: YAML, TOML, or JSON config files for persistent settings
 - **Full-screen TUI**: Clean, distraction-free interface using your entire terminal
 
 ---
@@ -95,6 +96,66 @@ Options:
   -P, --preview-size string        Preview size: number for lines/cols, or number% for percentage (default "40%")
   -o, --preview-position string    Preview position: bottom, top, left, right (default "bottom")
 ```
+
+---
+
+## 📁 Configuration File
+
+`watchr` supports configuration files in YAML, TOML, or JSON format. Settings in config files serve as defaults that can be overridden by command-line flags.
+
+### Config File Locations
+
+Config files are searched in the following order (later files override earlier ones):
+
+1. **XDG config directory** (Linux/macOS): `~/.config/watchr/watchr.{yaml,toml,json}`
+2. **Windows**: `%APPDATA%\watchr\watchr.{yaml,toml,json}`
+3. **Current directory** (project-local): `./watchr.{yaml,toml,json}`
+
+### Example Configurations
+
+**YAML** (`watchr.yaml`):
+```yaml
+shell: bash
+preview-size: "50%"
+preview-position: right
+line-numbers: true
+line-width: 4
+prompt: "> "
+refresh: 0
+```
+
+**TOML** (`watchr.toml`):
+```toml
+shell = "bash"
+preview-size = "50%"
+preview-position = "right"
+line-numbers = true
+line-width = 4
+prompt = "> "
+refresh = 0
+```
+
+**JSON** (`watchr.json`):
+```json
+{
+  "shell": "bash",
+  "preview-size": "50%",
+  "preview-position": "right",
+  "line-numbers": true,
+  "line-width": 4,
+  "prompt": "> ",
+  "refresh": 0
+}
+```
+
+### Priority Order
+
+Configuration values are applied in this order (later sources override earlier ones):
+
+1. Built-in defaults
+2. XDG/system config file
+3. Project-local config file (current directory)
+4. Command-line flags
 
 ---
 

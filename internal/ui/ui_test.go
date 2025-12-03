@@ -252,10 +252,13 @@ func TestVisibleLines(t *testing.T) {
 	m := initialModel(cfg)
 	m.height = 100
 
+	// Fixed lines: top border (1) + header (2) + separator (1) + bottom border (1) + prompt (1) = 6
+	fixedLines := 6
+
 	// Without preview
 	m.showPreview = false
 	visible := m.visibleLines()
-	expected := 100 - 3 // height - header
+	expected := 100 - fixedLines
 	if visible != expected {
 		t.Errorf("expected %d visible lines without preview, got %d", expected, visible)
 	}
@@ -264,7 +267,8 @@ func TestVisibleLines(t *testing.T) {
 	m.showPreview = true
 	visible = m.visibleLines()
 	previewHeight := 100 * 40 / 100 // 40%
-	expected = 100 - 3 - previewHeight
+	// Add 1 for the separator between content and preview
+	expected = 100 - fixedLines - previewHeight - 1
 	if visible != expected {
 		t.Errorf("expected %d visible lines with preview, got %d", expected, visible)
 	}
@@ -273,7 +277,8 @@ func TestVisibleLines(t *testing.T) {
 	m.config.PreviewSizeIsPercent = false
 	m.config.PreviewSize = 10
 	visible = m.visibleLines()
-	expected = 100 - 3 - 10 // height - header - 10 lines
+	// Add 1 for the separator between content and preview
+	expected = 100 - fixedLines - 10 - 1
 	if visible != expected {
 		t.Errorf("expected %d visible lines with absolute preview size, got %d", expected, visible)
 	}

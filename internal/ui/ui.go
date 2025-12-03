@@ -250,12 +250,78 @@ func (m model) previewSize() int {
 }
 
 func (m model) visibleLines() int {
-	// header (1) + command (1) + prompt at bottom (1) = 3 fixed lines
-	fixedLines := 3
+	// Fixed lines: top border (1) + header (2) + separator (1) + bottom border (1) + prompt (1) = 6
+	fixedLines := 6
 	if m.showPreview && (m.config.PreviewPosition == PreviewTop || m.config.PreviewPosition == PreviewBottom) {
-		return m.height - fixedLines - m.previewSize()
+		// Add preview height + separator between content and preview
+		return m.height - fixedLines - m.previewSize() - 1
 	}
 	return m.height - fixedLines
+}
+
+const ellipsis = "…"
+
+// truncateToWidth truncates a string to fit within the given visual width,
+// adding an ellipsis if truncation occurs. Uses visual width, not byte count.
+func truncateToWidth(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return ""
+	}
+	sw := lipgloss.Width(s)
+	if sw <= maxWidth {
+		return s
+	}
+	// Need to truncate - leave room for ellipsis (1 char wide)
+	targetWidth := maxWidth - 1
+	if targetWidth <= 0 {
+		return ellipsis
+	}
+
+	// Truncate rune by rune until we fit
+	result := ""
+	currentWidth := 0
+	for _, r := range s {
+		runeWidth := lipgloss.Width(string(r))
+		if currentWidth+runeWidth > targetWidth {
+			break
+		}
+		result += string(r)
+		currentWidth += runeWidth
+	}
+	return result + ellipsis
+}
+
+// wrapText wraps text to fit within the given width, returning multiple lines.
+func wrapText(s string, width int) []string {
+	if width <= 0 {
+		return nil
+	}
+	if s == "" {
+		return []string{""}
+	}
+
+	var lines []string
+	currentLine := ""
+	currentWidth := 0
+
+	for _, r := range s {
+		runeWidth := lipgloss.Width(string(r))
+		if currentWidth+runeWidth > width {
+			// Start new line
+			lines = append(lines, currentLine)
+			currentLine = string(r)
+			currentWidth = runeWidth
+		} else {
+			currentLine += string(r)
+			currentWidth += runeWidth
+		}
+	}
+	// Don't forget the last line
+	if currentLine != "" {
+		lines = append(lines, currentLine)
+	}
+
+	return lines
 }
 
 func (m *model) updateFiltered() {
@@ -283,8 +349,25 @@ func (m model) View() string {
 		return "Loading..."
 	}
 
+	// Box drawing characters (rounded)
+	const (
+		topLeft     = "╭"
+		topRight    = "╮"
+		bottomLeft  = "╰"
+		bottomRight = "╯"
+		horizontal  = "─"
+		vertical    = "│"
+		leftT       = "├"
+		rightT      = "┤"
+		topT        = "┬"
+		bottomT     = "┴"
+	)
+
+	borderColor := lipgloss.Color("240")
+	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
+
 	// Styles
-	headerStyle := lipgloss.NewStyle().
+	headerTextStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("12"))
 
@@ -299,19 +382,51 @@ func (m model) View() string {
 	lineNumStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("241"))
 
-	previewStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		Padding(0, 1)
-
 	filterStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("11"))
 
-	// Build header (2 lines at top)
-	var headerLines []string
-	header := "r reload • q quit • j/k move • g/G first/last • ^d/u/f/b scroll • p preview • / filter"
-	headerLines = append(headerLines, headerStyle.Render(header))
-	headerLines = append(headerLines, fmt.Sprintf("Command: %s", m.config.Command))
+	// Inner width (excluding border characters)
+	innerWidth := m.width - 2
+
+	// Helper to create a horizontal line (optionally with a T-junction for vertical split)
+	hLine := func(left, right string, splitPos int) string {
+		if splitPos > 0 && splitPos < innerWidth {
+			return borderStyle.Render(left + strings.Repeat(horizontal, splitPos) + topT + strings.Repeat(horizontal, innerWidth-splitPos-1) + right)
+		}
+		return borderStyle.Render(left + strings.Repeat(horizontal, innerWidth) + right)
+	}
+
+	// Helper for header separator line with T junction pointing down (for vertical split below)
+	hLineMid := func(left, right string, splitPos int) string {
+		if splitPos > 0 && splitPos < innerWidth {
+			return borderStyle.Render(left + strings.Repeat(horizontal, splitPos) + topT + strings.Repeat(horizontal, innerWidth-splitPos-1) + right)
+		}
+		return borderStyle.Render(left + strings.Repeat(horizontal, innerWidth) + right)
+	}
+
+	// Helper for bottom line with vertical split
+	hLineBottom := func(left, right string, splitPos int) string {
+		if splitPos > 0 && splitPos < innerWidth {
+			return borderStyle.Render(left + strings.Repeat(horizontal, splitPos) + bottomT + strings.Repeat(horizontal, innerWidth-splitPos-1) + right)
+		}
+		return borderStyle.Render(left + strings.Repeat(horizontal, innerWidth) + right)
+	}
+
+	// Helper to pad content to inner width
+	padLine := func(content string) string {
+		contentWidth := lipgloss.Width(content)
+		if contentWidth < innerWidth {
+			content += strings.Repeat(" ", innerWidth-contentWidth)
+		} else if contentWidth > innerWidth {
+			// Use lipgloss style with MaxWidth for ANSI-safe truncation
+			content = lipgloss.NewStyle().MaxWidth(innerWidth-1).Render(content) + ellipsis
+		}
+		return borderStyle.Render(vertical) + content + borderStyle.Render(vertical)
+	}
+
+	// Build header content
+	header := headerTextStyle.Render("r reload • q quit • j/k move • g/G first/last • ^d/u/f/b scroll • p preview • / filter")
+	commandLine := fmt.Sprintf("Command: %s", m.config.Command)
 
 	// Build prompt line (will go at bottom)
 	var promptLine string
@@ -328,10 +443,13 @@ func (m model) View() string {
 
 	// Calculate layout
 	listHeight := m.visibleLines()
-	listWidth := m.width
+	// listWidth is content area minus 1 for padding before border
+	listWidth := innerWidth - 1
 
 	if m.showPreview && (m.config.PreviewPosition == PreviewLeft || m.config.PreviewPosition == PreviewRight) {
-		listWidth = m.width - m.previewSize()
+		// For horizontal split: innerWidth = leftW + 1 (middle border) + rightW
+		// List gets the non-preview side width, minus 1 for padding
+		listWidth = innerWidth - m.previewSize() - 2
 	}
 
 	// Build lines view
@@ -351,15 +469,21 @@ func (m model) View() string {
 		}
 		line := m.lines[idx]
 
-		lineText := line.Content
+		var lineText string
 		if m.config.ShowLineNums {
-			lineNum := lineNumStyle.Render(fmt.Sprintf("%*d  ", m.config.LineNumWidth, line.Number))
-			lineText = lineNum + line.Content
-		}
+			// Calculate widths without ANSI codes first
+			lineNumStr := fmt.Sprintf("%*d  ", m.config.LineNumWidth, line.Number)
+			lineNumWidth := len(lineNumStr) // Plain ASCII, so len() == visual width
+			contentWidth := listWidth - lineNumWidth
 
-		// Truncate if too long
-		if len(lineText) > listWidth-2 && listWidth > 5 {
-			lineText = lineText[:listWidth-5] + "..."
+			// Truncate content (no ANSI codes yet)
+			content := truncateToWidth(line.Content, contentWidth)
+
+			// Now apply styling
+			lineText = lineNumStyle.Render(lineNumStr) + content
+		} else {
+			// No line numbers, just truncate content
+			lineText = truncateToWidth(line.Content, listWidth)
 		}
 
 		if lineIdx == m.cursor {
@@ -383,45 +507,168 @@ func (m model) View() string {
 		}
 	}
 
-	// Compose final view
-	var contentSection string
-
-	if !m.showPreview {
-		contentSection = strings.Join(listLines, "\n")
-	} else {
-		previewH := m.previewSize()
-		previewW := m.width - 4
-
-		if m.config.PreviewPosition == PreviewLeft || m.config.PreviewPosition == PreviewRight {
-			previewW = m.previewSize() - 4
-		}
-
-		styledPreview := previewStyle.
-			Width(previewW).
-			Height(previewH - 2).
-			Render(previewContent)
-
-		listContent := strings.Join(listLines, "\n")
-
-		switch m.config.PreviewPosition {
-		case PreviewTop:
-			contentSection = styledPreview + "\n" + listContent
-		case PreviewBottom:
-			contentSection = listContent + "\n" + styledPreview
-		case PreviewLeft:
-			contentSection = lipgloss.JoinHorizontal(lipgloss.Top, styledPreview, " ", listContent)
-		case PreviewRight:
-			contentSection = lipgloss.JoinHorizontal(lipgloss.Top, listContent, " ", styledPreview)
-		}
-	}
-
 	// Error message
 	if m.errorMsg != "" {
-		contentSection += "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("Error: "+m.errorMsg)
+		listLines = append(listLines, lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("Error: "+m.errorMsg))
 	}
 
-	// Combine: header at top, content in middle, prompt at bottom
-	fullView := strings.Join(headerLines, "\n") + "\n" + contentSection + "\n" + promptLine
+	// Calculate vertical split position for left/right preview
+	// This must match where the middle vertical bar falls in content lines
+	var vSplitPos int
+	if m.showPreview {
+		switch m.config.PreviewPosition {
+		case PreviewLeft:
+			vSplitPos = m.previewSize()
+		case PreviewRight:
+			// leftW = innerWidth - previewSize - 1, so split is at leftW
+			vSplitPos = innerWidth - m.previewSize() - 1
+		}
+	}
+
+	// Build the unified box
+	var lines []string
+
+	// Top border (no junction - vertical split starts at header separator)
+	lines = append(lines, hLine(topLeft, topRight, 0))
+
+	// Header lines
+	lines = append(lines, padLine(header))
+	lines = append(lines, padLine(commandLine))
+
+	// Separator between header and content (T junction if vertical split)
+	lines = append(lines, hLineMid(leftT, rightT, vSplitPos))
+
+	// Content area (with optional preview)
+	if !m.showPreview {
+		// Just content lines, padded to fill height
+		for i := 0; i < listHeight; i++ {
+			if i < len(listLines) {
+				lines = append(lines, padLine(listLines[i]))
+			} else {
+				lines = append(lines, padLine(""))
+			}
+		}
+	} else {
+		previewH := m.previewSize()
+
+		switch m.config.PreviewPosition {
+		case PreviewTop, PreviewBottom:
+			// Vertical split - preview above or below content
+			var previewLines []string
+			// Wrap preview content to fit width
+			if previewContent != "" {
+				previewLines = wrapText(previewContent, innerWidth)
+			}
+			// Pad preview to height
+			for len(previewLines) < previewH {
+				previewLines = append(previewLines, "")
+			}
+
+			if m.config.PreviewPosition == PreviewTop {
+				// Preview first
+				for _, line := range previewLines[:previewH] {
+					lines = append(lines, padLine(line))
+				}
+				// Separator (no vertical split for top/bottom preview)
+				lines = append(lines, hLine(leftT, rightT, 0))
+				// Then content, padded to fill height
+				for i := 0; i < listHeight; i++ {
+					if i < len(listLines) {
+						lines = append(lines, padLine(listLines[i]))
+					} else {
+						lines = append(lines, padLine(""))
+					}
+				}
+			} else {
+				// Content first, padded to fill height
+				for i := 0; i < listHeight; i++ {
+					if i < len(listLines) {
+						lines = append(lines, padLine(listLines[i]))
+					} else {
+						lines = append(lines, padLine(""))
+					}
+				}
+				// Separator (no vertical split for top/bottom preview)
+				lines = append(lines, hLine(leftT, rightT, 0))
+				// Then preview
+				for _, line := range previewLines[:previewH] {
+					lines = append(lines, padLine(line))
+				}
+			}
+
+		case PreviewLeft, PreviewRight:
+			// Horizontal split: |leftContent|rightContent|
+			// innerWidth = leftW + 1 (middle border) + rightW
+			var leftW, rightW int
+			if m.config.PreviewPosition == PreviewLeft {
+				leftW = m.previewSize()
+				rightW = innerWidth - leftW - 1
+			} else {
+				rightW = m.previewSize()
+				leftW = innerWidth - rightW - 1
+			}
+
+			// Prepare preview lines (wrap text instead of truncating)
+			var previewLines []string
+			if previewContent != "" {
+				// Determine preview width for wrapping
+				previewW := leftW
+				if m.config.PreviewPosition == PreviewRight {
+					previewW = rightW
+				}
+				previewLines = wrapText(previewContent, previewW)
+			}
+			for len(previewLines) < listHeight {
+				previewLines = append(previewLines, "")
+			}
+
+			// Helper to truncate/pad to width
+			fitToWidth := func(s string, w int, isPreview bool) string {
+				sw := lipgloss.Width(s)
+				if sw > w {
+					if isPreview {
+						// Preview is already wrapped, just pad
+						return s + strings.Repeat(" ", w-sw)
+					}
+					// List content may have ANSI codes, use lipgloss for safe truncation
+					return lipgloss.NewStyle().MaxWidth(w-1).Render(s) + ellipsis
+				}
+				return s + strings.Repeat(" ", w-sw)
+			}
+
+			// Build combined lines
+			for i := 0; i < listHeight; i++ {
+				var leftContent, rightContent string
+				var leftIsPreview, rightIsPreview bool
+
+				if m.config.PreviewPosition == PreviewLeft {
+					leftContent = previewLines[i]
+					leftIsPreview = true
+					if i < len(listLines) {
+						rightContent = listLines[i]
+					}
+				} else {
+					if i < len(listLines) {
+						leftContent = listLines[i]
+					}
+					rightContent = previewLines[i]
+					rightIsPreview = true
+				}
+
+				leftContent = fitToWidth(leftContent, leftW, leftIsPreview)
+				rightContent = fitToWidth(rightContent, rightW, rightIsPreview)
+
+				line := borderStyle.Render(vertical) + leftContent + borderStyle.Render(vertical) + rightContent + borderStyle.Render(vertical)
+				lines = append(lines, line)
+			}
+		}
+	}
+
+	// Bottom border
+	lines = append(lines, hLineBottom(bottomLeft, bottomRight, vSplitPos))
+
+	// Combine box with prompt
+	fullView := strings.Join(lines, "\n") + "\n" + promptLine
 
 	return fullView
 }

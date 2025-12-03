@@ -23,14 +23,15 @@ const (
 
 // Config holds the UI configuration
 type Config struct {
-	Command         string
-	Shell           string
-	PreviewHeight   int
-	PreviewPosition PreviewPosition
-	ShowLineNums    bool
-	LineNumWidth    int
-	Prompt          string
-	RefreshSeconds  int
+	Command              string
+	Shell                string
+	PreviewSize          int
+	PreviewSizeIsPercent bool
+	PreviewPosition      PreviewPosition
+	ShowLineNums         bool
+	LineNumWidth         int
+	Prompt               string
+	RefreshSeconds       int
 }
 
 // model represents the application state
@@ -238,12 +239,21 @@ func (m *model) adjustOffset() {
 	m.offset = idealOffset
 }
 
+func (m model) previewSize() int {
+	if m.config.PreviewSizeIsPercent {
+		if m.config.PreviewPosition == PreviewLeft || m.config.PreviewPosition == PreviewRight {
+			return m.width * m.config.PreviewSize / 100
+		}
+		return m.height * m.config.PreviewSize / 100
+	}
+	return m.config.PreviewSize
+}
+
 func (m model) visibleLines() int {
 	// header (1) + command (1) + prompt at bottom (1) = 3 fixed lines
 	fixedLines := 3
 	if m.showPreview && (m.config.PreviewPosition == PreviewTop || m.config.PreviewPosition == PreviewBottom) {
-		previewHeight := m.height * m.config.PreviewHeight / 100
-		return m.height - fixedLines - previewHeight
+		return m.height - fixedLines - m.previewSize()
 	}
 	return m.height - fixedLines
 }
@@ -321,7 +331,7 @@ func (m model) View() string {
 	listWidth := m.width
 
 	if m.showPreview && (m.config.PreviewPosition == PreviewLeft || m.config.PreviewPosition == PreviewRight) {
-		listWidth = m.width / 2
+		listWidth = m.width - m.previewSize()
 	}
 
 	// Build lines view
@@ -379,11 +389,11 @@ func (m model) View() string {
 	if !m.showPreview {
 		contentSection = strings.Join(listLines, "\n")
 	} else {
-		previewH := m.height * m.config.PreviewHeight / 100
+		previewH := m.previewSize()
 		previewW := m.width - 4
 
 		if m.config.PreviewPosition == PreviewLeft || m.config.PreviewPosition == PreviewRight {
-			previewW = m.width/2 - 4
+			previewW = m.previewSize() - 4
 		}
 
 		styledPreview := previewStyle.

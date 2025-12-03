@@ -85,15 +85,15 @@ watchr -r 5 "find . -name '*.go' -mmin -1"
 Usage: watchr [options] <command to run>
 
 Options:
-  -h, --help                      Show help
-  -v, --version                   Show version
-  -r, --refresh int               Auto-refresh interval in seconds (0 = disabled)
-  -p, --prompt string             Prompt string (default "watchr> ")
-  -s, --shell string              Shell to use for executing commands (default "sh")
-  -n, --no-line-numbers           Disable line numbers
-  -w, --line-width int            Line number width (default 6)
-  -P, --preview-height int        Preview window height/width percentage (default 40)
-      --preview-position string   Preview position: bottom, top, left, right (default "bottom")
+  -h, --help                       Show help
+  -v, --version                    Show version
+  -r, --refresh int                Auto-refresh interval in seconds (0 = disabled)
+  -p, --prompt string              Prompt string (default "watchr> ")
+  -s, --shell string               Shell to use for executing commands (default "sh")
+  -n, --no-line-numbers            Disable line numbers
+  -w, --line-width int             Line number width (default 6)
+  -P, --preview-size string        Preview size: number for lines/cols, or number% for percentage (default "40%")
+  -o, --preview-position string    Preview position: bottom, top, left, right (default "bottom")
 ```
 
 ---

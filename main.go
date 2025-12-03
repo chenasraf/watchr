@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/chenasraf/watchr/internal/ui"
@@ -17,7 +18,7 @@ func main() {
 	var (
 		showVersion     bool
 		showHelp        bool
-		previewHeight   int
+		previewSize     string
 		previewPosition string
 		noLineNumbers   bool
 		lineNumWidth    int
@@ -28,8 +29,8 @@ func main() {
 
 	flag.BoolVarP(&showVersion, "version", "v", false, "Show version")
 	flag.BoolVarP(&showHelp, "help", "h", false, "Show help")
-	flag.IntVarP(&previewHeight, "preview-height", "P", 40, "Preview window height/width percentage (1-100)")
-	flag.StringVar(&previewPosition, "preview-position", "bottom", "Preview position: bottom, top, left, right")
+	flag.StringVarP(&previewSize, "preview-size", "P", "40%", "Preview size: number for lines/cols, or number% for percentage (e.g., 10 or 40%)")
+	flag.StringVarP(&previewPosition, "preview-position", "o", "bottom", "Preview position: bottom, top, left, right")
 	flag.BoolVarP(&noLineNumbers, "no-line-numbers", "n", false, "Disable line numbers")
 	flag.IntVarP(&lineNumWidth, "line-width", "w", 6, "Line number width")
 	flag.StringVarP(&prompt, "prompt", "p", "watchr> ", "Prompt string")
@@ -81,15 +82,25 @@ func main() {
 
 	cmdStr := strings.Join(args, " ")
 
+	// Parse preview size (e.g., "40" for lines/cols, "40%" for percentage)
+	previewSizeIsPercent := strings.HasSuffix(previewSize, "%")
+	previewSizeStr := strings.TrimSuffix(previewSize, "%")
+	previewSizeVal, err := strconv.Atoi(previewSizeStr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Invalid preview size: %s\n", previewSize)
+		os.Exit(1)
+	}
+
 	config := ui.Config{
-		Command:         cmdStr,
-		Shell:           shell,
-		PreviewHeight:   previewHeight,
-		PreviewPosition: ui.PreviewPosition(previewPosition),
-		ShowLineNums:    !noLineNumbers,
-		LineNumWidth:    lineNumWidth,
-		Prompt:          prompt,
-		RefreshSeconds:  refreshSeconds,
+		Command:              cmdStr,
+		Shell:                shell,
+		PreviewSize:          previewSizeVal,
+		PreviewSizeIsPercent: previewSizeIsPercent,
+		PreviewPosition:      ui.PreviewPosition(previewPosition),
+		ShowLineNums:         !noLineNumbers,
+		LineNumWidth:         lineNumWidth,
+		Prompt:               prompt,
+		RefreshSeconds:       refreshSeconds,
 	}
 
 	if err := ui.Run(config); err != nil {

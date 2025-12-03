@@ -8,14 +8,15 @@ import (
 
 func TestConfig(t *testing.T) {
 	cfg := Config{
-		Command:         "echo test",
-		Shell:           "sh",
-		PreviewHeight:   40,
-		PreviewPosition: PreviewBottom,
-		ShowLineNums:    true,
-		LineNumWidth:    6,
-		Prompt:          "watchr> ",
-		RefreshSeconds:  5,
+		Command:              "echo test",
+		Shell:                "sh",
+		PreviewSize:          40,
+		PreviewSizeIsPercent: true,
+		PreviewPosition:      PreviewBottom,
+		ShowLineNums:         true,
+		LineNumWidth:         6,
+		Prompt:               "watchr> ",
+		RefreshSeconds:       5,
 	}
 
 	if cfg.Command != "echo test" {
@@ -26,8 +27,12 @@ func TestConfig(t *testing.T) {
 		t.Errorf("expected shell 'sh', got %q", cfg.Shell)
 	}
 
-	if cfg.PreviewHeight != 40 {
-		t.Errorf("expected preview height 40, got %d", cfg.PreviewHeight)
+	if cfg.PreviewSize != 40 {
+		t.Errorf("expected preview size 40, got %d", cfg.PreviewSize)
+	}
+
+	if !cfg.PreviewSizeIsPercent {
+		t.Error("expected PreviewSizeIsPercent to be true")
 	}
 
 	if cfg.PreviewPosition != PreviewBottom {
@@ -81,8 +86,12 @@ func TestConfigDefaults(t *testing.T) {
 		t.Errorf("expected empty shell, got %q", cfg.Shell)
 	}
 
-	if cfg.PreviewHeight != 0 {
-		t.Errorf("expected preview height 0, got %d", cfg.PreviewHeight)
+	if cfg.PreviewSize != 0 {
+		t.Errorf("expected preview size 0, got %d", cfg.PreviewSize)
+	}
+
+	if cfg.PreviewSizeIsPercent {
+		t.Error("expected PreviewSizeIsPercent to be false")
 	}
 
 	if cfg.PreviewPosition != "" {
@@ -104,13 +113,14 @@ func TestConfigDefaults(t *testing.T) {
 
 func TestInitialModel(t *testing.T) {
 	cfg := Config{
-		Command:         "echo test",
-		Shell:           "sh",
-		PreviewHeight:   40,
-		PreviewPosition: PreviewBottom,
-		ShowLineNums:    true,
-		LineNumWidth:    6,
-		Prompt:          "watchr> ",
+		Command:              "echo test",
+		Shell:                "sh",
+		PreviewSize:          40,
+		PreviewSizeIsPercent: true,
+		PreviewPosition:      PreviewBottom,
+		ShowLineNums:         true,
+		LineNumWidth:         6,
+		Prompt:               "watchr> ",
 	}
 
 	m := initialModel(cfg)
@@ -232,10 +242,11 @@ func TestModelMoveCursor(t *testing.T) {
 
 func TestVisibleLines(t *testing.T) {
 	cfg := Config{
-		Command:         "echo test",
-		Shell:           "sh",
-		PreviewHeight:   40,
-		PreviewPosition: PreviewBottom,
+		Command:              "echo test",
+		Shell:                "sh",
+		PreviewSize:          40,
+		PreviewSizeIsPercent: true,
+		PreviewPosition:      PreviewBottom,
 	}
 
 	m := initialModel(cfg)
@@ -249,12 +260,21 @@ func TestVisibleLines(t *testing.T) {
 		t.Errorf("expected %d visible lines without preview, got %d", expected, visible)
 	}
 
-	// With preview at bottom
+	// With preview at bottom (percentage)
 	m.showPreview = true
 	visible = m.visibleLines()
 	previewHeight := 100 * 40 / 100 // 40%
 	expected = 100 - 3 - previewHeight
 	if visible != expected {
 		t.Errorf("expected %d visible lines with preview, got %d", expected, visible)
+	}
+
+	// With preview using absolute size
+	m.config.PreviewSizeIsPercent = false
+	m.config.PreviewSize = 10
+	visible = m.visibleLines()
+	expected = 100 - 3 - 10 // height - header - 10 lines
+	if visible != expected {
+		t.Errorf("expected %d visible lines with absolute preview size, got %d", expected, visible)
 	}
 }

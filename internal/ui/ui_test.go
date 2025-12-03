@@ -1,0 +1,260 @@
+package ui
+
+import (
+	"testing"
+
+	"github.com/chenasraf/watchr/internal/runner"
+)
+
+func TestConfig(t *testing.T) {
+	cfg := Config{
+		Command:         "echo test",
+		Shell:           "sh",
+		PreviewHeight:   40,
+		PreviewPosition: PreviewBottom,
+		ShowLineNums:    true,
+		LineNumWidth:    6,
+		Prompt:          "watchr> ",
+		RefreshSeconds:  5,
+	}
+
+	if cfg.Command != "echo test" {
+		t.Errorf("expected command 'echo test', got %q", cfg.Command)
+	}
+
+	if cfg.Shell != "sh" {
+		t.Errorf("expected shell 'sh', got %q", cfg.Shell)
+	}
+
+	if cfg.PreviewHeight != 40 {
+		t.Errorf("expected preview height 40, got %d", cfg.PreviewHeight)
+	}
+
+	if cfg.PreviewPosition != PreviewBottom {
+		t.Errorf("expected preview position 'bottom', got %q", cfg.PreviewPosition)
+	}
+
+	if !cfg.ShowLineNums {
+		t.Error("expected ShowLineNums to be true")
+	}
+
+	if cfg.LineNumWidth != 6 {
+		t.Errorf("expected line num width 6, got %d", cfg.LineNumWidth)
+	}
+
+	if cfg.Prompt != "watchr> " {
+		t.Errorf("expected prompt 'watchr> ', got %q", cfg.Prompt)
+	}
+
+	if cfg.RefreshSeconds != 5 {
+		t.Errorf("expected refresh seconds 5, got %d", cfg.RefreshSeconds)
+	}
+}
+
+func TestPreviewPositionConstants(t *testing.T) {
+	tests := []struct {
+		pos  PreviewPosition
+		want string
+	}{
+		{PreviewBottom, "bottom"},
+		{PreviewTop, "top"},
+		{PreviewLeft, "left"},
+		{PreviewRight, "right"},
+	}
+
+	for _, tt := range tests {
+		if string(tt.pos) != tt.want {
+			t.Errorf("PreviewPosition %v != %q", tt.pos, tt.want)
+		}
+	}
+}
+
+func TestConfigDefaults(t *testing.T) {
+	// Test with zero values
+	cfg := Config{}
+
+	if cfg.Command != "" {
+		t.Errorf("expected empty command, got %q", cfg.Command)
+	}
+
+	if cfg.Shell != "" {
+		t.Errorf("expected empty shell, got %q", cfg.Shell)
+	}
+
+	if cfg.PreviewHeight != 0 {
+		t.Errorf("expected preview height 0, got %d", cfg.PreviewHeight)
+	}
+
+	if cfg.PreviewPosition != "" {
+		t.Errorf("expected empty preview position, got %q", cfg.PreviewPosition)
+	}
+
+	if cfg.ShowLineNums {
+		t.Error("expected ShowLineNums to be false")
+	}
+
+	if cfg.LineNumWidth != 0 {
+		t.Errorf("expected line num width 0, got %d", cfg.LineNumWidth)
+	}
+
+	if cfg.Prompt != "" {
+		t.Errorf("expected empty prompt, got %q", cfg.Prompt)
+	}
+}
+
+func TestInitialModel(t *testing.T) {
+	cfg := Config{
+		Command:         "echo test",
+		Shell:           "sh",
+		PreviewHeight:   40,
+		PreviewPosition: PreviewBottom,
+		ShowLineNums:    true,
+		LineNumWidth:    6,
+		Prompt:          "watchr> ",
+	}
+
+	m := initialModel(cfg)
+
+	if m.config.Command != cfg.Command {
+		t.Errorf("expected command %q, got %q", cfg.Command, m.config.Command)
+	}
+
+	if m.cursor != 0 {
+		t.Errorf("expected cursor at 0, got %d", m.cursor)
+	}
+
+	if m.offset != 0 {
+		t.Errorf("expected offset at 0, got %d", m.offset)
+	}
+
+	if m.filterMode {
+		t.Error("expected filterMode to be false")
+	}
+
+	if m.showPreview {
+		t.Error("expected showPreview to be false")
+	}
+
+	if !m.loading {
+		t.Error("expected loading to be true initially")
+	}
+}
+
+func TestModelUpdateFiltered(t *testing.T) {
+	cfg := Config{
+		Command: "echo test",
+		Shell:   "sh",
+	}
+
+	m := initialModel(cfg)
+
+	// Add some test lines
+	m.lines = []runner.Line{
+		{Number: 1, Content: "hello world"},
+		{Number: 2, Content: "foo bar"},
+		{Number: 3, Content: "hello foo"},
+		{Number: 4, Content: "baz qux"},
+	}
+
+	// Test with no filter
+	m.filter = ""
+	m.updateFiltered()
+
+	if len(m.filtered) != 4 {
+		t.Errorf("expected 4 filtered lines, got %d", len(m.filtered))
+	}
+
+	// Test with filter
+	m.filter = "hello"
+	m.updateFiltered()
+
+	if len(m.filtered) != 2 {
+		t.Errorf("expected 2 filtered lines for 'hello', got %d", len(m.filtered))
+	}
+
+	// Test case insensitive
+	m.filter = "HELLO"
+	m.updateFiltered()
+
+	if len(m.filtered) != 2 {
+		t.Errorf("expected 2 filtered lines for 'HELLO' (case insensitive), got %d", len(m.filtered))
+	}
+
+	// Test no matches
+	m.filter = "xyz"
+	m.updateFiltered()
+
+	if len(m.filtered) != 0 {
+		t.Errorf("expected 0 filtered lines for 'xyz', got %d", len(m.filtered))
+	}
+}
+
+func TestModelMoveCursor(t *testing.T) {
+	cfg := Config{
+		Command: "echo test",
+		Shell:   "sh",
+	}
+
+	m := initialModel(cfg)
+	m.filtered = []int{0, 1, 2, 3, 4}
+	m.height = 100 // enough height for all lines
+
+	// Move down
+	m.moveCursor(1)
+	if m.cursor != 1 {
+		t.Errorf("expected cursor at 1, got %d", m.cursor)
+	}
+
+	// Move down more
+	m.moveCursor(2)
+	if m.cursor != 3 {
+		t.Errorf("expected cursor at 3, got %d", m.cursor)
+	}
+
+	// Move past end
+	m.moveCursor(10)
+	if m.cursor != 4 {
+		t.Errorf("expected cursor at 4 (clamped), got %d", m.cursor)
+	}
+
+	// Move up
+	m.moveCursor(-2)
+	if m.cursor != 2 {
+		t.Errorf("expected cursor at 2, got %d", m.cursor)
+	}
+
+	// Move past beginning
+	m.moveCursor(-10)
+	if m.cursor != 0 {
+		t.Errorf("expected cursor at 0 (clamped), got %d", m.cursor)
+	}
+}
+
+func TestVisibleLines(t *testing.T) {
+	cfg := Config{
+		Command:         "echo test",
+		Shell:           "sh",
+		PreviewHeight:   40,
+		PreviewPosition: PreviewBottom,
+	}
+
+	m := initialModel(cfg)
+	m.height = 100
+
+	// Without preview
+	m.showPreview = false
+	visible := m.visibleLines()
+	expected := 100 - 3 // height - header
+	if visible != expected {
+		t.Errorf("expected %d visible lines without preview, got %d", expected, visible)
+	}
+
+	// With preview at bottom
+	m.showPreview = true
+	visible = m.visibleLines()
+	previewHeight := 100 * 40 / 100 // 40%
+	expected = 100 - 3 - previewHeight
+	if visible != expected {
+		t.Errorf("expected %d visible lines with preview, got %d", expected, visible)
+	}
+}

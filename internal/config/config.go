@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -93,6 +94,25 @@ func ShowLineNumbers() bool {
 // ConfigFileUsed returns the config file path if one was loaded.
 func ConfigFileUsed() string {
 	return viper.ConfigFileUsed()
+}
+
+// PrintConfig prints the current configuration to stdout.
+func PrintConfig() {
+	configFile := ConfigFileUsed()
+	if configFile != "" {
+		fmt.Printf("Config file: %s\n\n", configFile)
+	} else {
+		fmt.Println("Config file: (none loaded)")
+	}
+
+	fmt.Println("Current configuration:")
+	fmt.Printf("  %-20s %s\n", KeyShell+":", GetString(KeyShell))
+	fmt.Printf("  %-20s %s\n", KeyPreviewSize+":", GetString(KeyPreviewSize))
+	fmt.Printf("  %-20s %s\n", KeyPreviewPosition+":", GetString(KeyPreviewPosition))
+	fmt.Printf("  %-20s %v\n", KeyLineNumbers+":", GetBool(KeyLineNumbers))
+	fmt.Printf("  %-20s %d\n", KeyLineWidth+":", GetInt(KeyLineWidth))
+	fmt.Printf("  %-20s %q\n", KeyPrompt+":", GetString(KeyPrompt))
+	fmt.Printf("  %-20s %d\n", KeyRefresh+":", GetInt(KeyRefresh))
 }
 
 // getConfigDir returns the appropriate config directory for the OS.

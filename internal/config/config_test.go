@@ -13,8 +13,36 @@ func resetViper() {
 	viper.Reset()
 }
 
-func TestInit(t *testing.T) {
+// isolateConfig sets up a clean environment for config tests by:
+// - Resetting viper
+// - Changing to a temp directory
+// - Setting XDG_CONFIG_HOME to the temp directory
+// Returns the temp directory path and a cleanup function.
+func isolateConfig(t *testing.T) (string, func()) {
+	t.Helper()
 	resetViper()
+
+	tmpDir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change directory: %v", err)
+	}
+
+	oldXDG := os.Getenv("XDG_CONFIG_HOME")
+	_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	cleanup := func() {
+		_ = os.Chdir(oldWd)
+		_ = os.Setenv("XDG_CONFIG_HOME", oldXDG)
+	}
+
+	return tmpDir, cleanup
+}
+
+func TestInit(t *testing.T) {
+	_, cleanup := isolateConfig(t)
+	defer cleanup()
+
 	Init()
 
 	// Check defaults are set
@@ -48,7 +76,9 @@ func TestInit(t *testing.T) {
 }
 
 func TestGetters(t *testing.T) {
-	resetViper()
+	_, cleanup := isolateConfig(t)
+	defer cleanup()
+
 	Init()
 
 	if got := GetString(KeyShell); got != "sh" {
@@ -65,7 +95,9 @@ func TestGetters(t *testing.T) {
 }
 
 func TestShowLineNumbers(t *testing.T) {
-	resetViper()
+	_, cleanup := isolateConfig(t)
+	defer cleanup()
+
 	Init()
 
 	// Default: line numbers enabled
@@ -87,7 +119,9 @@ func TestShowLineNumbers(t *testing.T) {
 }
 
 func TestBindFlags(t *testing.T) {
-	resetViper()
+	_, cleanup := isolateConfig(t)
+	defer cleanup()
+
 	Init()
 
 	// Create a new flag set
@@ -129,12 +163,11 @@ func TestBindFlags(t *testing.T) {
 }
 
 func TestConfigFileLoading(t *testing.T) {
-	resetViper()
+	tmpDir, cleanup := isolateConfig(t)
+	defer cleanup()
 
-	// Create a temp directory with a config file
-	tmpDir := t.TempDir()
+	// Create a config file in the temp directory
 	configPath := filepath.Join(tmpDir, "watchr.yaml")
-
 	configContent := `shell: zsh
 preview-size: "60%"
 preview-position: right
@@ -146,13 +179,6 @@ refresh: 5
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config file: %v", err)
 	}
-
-	// Change to temp directory
-	oldWd, _ := os.Getwd()
-	if err := os.Chdir(tmpDir); err != nil {
-		t.Fatalf("failed to change directory: %v", err)
-	}
-	defer func() { _ = os.Chdir(oldWd) }()
 
 	// Initialize config
 	Init()
@@ -189,25 +215,17 @@ refresh: 5
 }
 
 func TestConfigFileWithFlags(t *testing.T) {
-	resetViper()
+	tmpDir, cleanup := isolateConfig(t)
+	defer cleanup()
 
-	// Create a temp directory with a config file
-	tmpDir := t.TempDir()
+	// Create a config file in the temp directory
 	configPath := filepath.Join(tmpDir, "watchr.yaml")
-
 	configContent := `shell: zsh
 preview-size: "60%"
 `
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config file: %v", err)
 	}
-
-	// Change to temp directory
-	oldWd, _ := os.Getwd()
-	if err := os.Chdir(tmpDir); err != nil {
-		t.Fatalf("failed to change directory: %v", err)
-	}
-	defer func() { _ = os.Chdir(oldWd) }()
 
 	// Initialize config
 	Init()

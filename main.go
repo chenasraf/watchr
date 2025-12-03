@@ -22,11 +22,13 @@ func main() {
 	var (
 		showVersion bool
 		showHelp    bool
+		showConfig  bool
 	)
 
 	// Define flags (defaults shown in help, but actual defaults come from config)
 	flag.BoolVarP(&showVersion, "version", "v", false, "Show version")
 	flag.BoolVarP(&showHelp, "help", "h", false, "Show help")
+	flag.BoolVarP(&showConfig, "show-config", "C", false, "Show loaded configuration and exit")
 	flag.StringP("preview-size", "P", "40%", "Preview size: number for lines/cols, or number% for percentage (e.g., 10 or 40%)")
 	flag.StringP("preview-position", "o", "bottom", "Preview position: bottom, top, left, right")
 	flag.BoolP("no-line-numbers", "n", false, "Disable line numbers")
@@ -71,6 +73,11 @@ func main() {
 
 	if showVersion {
 		fmt.Printf("watchr %s\n", strings.TrimSpace(version))
+		os.Exit(0)
+	}
+
+	if showConfig {
+		config.PrintConfig()
 		os.Exit(0)
 	}
 

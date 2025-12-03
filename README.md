@@ -88,6 +88,7 @@ Usage: watchr [options] <command to run>
 Options:
   -h, --help                       Show help
   -v, --version                    Show version
+  -C, --show-config                Show loaded configuration and exit
   -r, --refresh int                Auto-refresh interval in seconds (0 = disabled)
   -p, --prompt string              Prompt string (default "watchr> ")
   -s, --shell string               Shell to use for executing commands (default "sh")

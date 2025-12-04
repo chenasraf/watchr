@@ -38,24 +38,25 @@ type Config struct {
 
 // model represents the application state
 type model struct {
-	config      Config
-	lines       []runner.Line
-	filtered    []int // indices into lines that match filter
-	cursor      int   // cursor position in filtered list
-	offset      int   // scroll offset for visible window
-	filter      string
-	filterMode  bool
-	showPreview bool
-	showHelp    bool // help overlay visible
-	width       int
-	height      int
-	runner      *runner.Runner
-	ctx         context.Context
-	cancel      context.CancelFunc
-	loading     bool
-	errorMsg    string
-	statusMsg   string // temporary status message (e.g., "Yanked!")
-	exitCode    int    // last command exit code
+	config       Config
+	lines        []runner.Line
+	filtered     []int // indices into lines that match filter
+	cursor       int   // cursor position in filtered list
+	offset       int   // scroll offset for visible window
+	filter       string
+	filterMode   bool
+	showPreview  bool
+	showHelp     bool // help overlay visible
+	width        int
+	height       int
+	runner       *runner.Runner
+	ctx          context.Context
+	cancel       context.CancelFunc
+	loading      bool
+	spinnerFrame int // current spinner animation frame
+	errorMsg     string
+	statusMsg    string // temporary status message (e.g., "Yanked!")
+	exitCode     int    // last command exit code
 }
 
 // messages
@@ -66,6 +67,10 @@ type resultMsg struct {
 type errMsg struct{ err error }
 type tickMsg time.Time
 type clearStatusMsg struct{}
+type spinnerTickMsg time.Time
+
+// Spinner frames for the loading animation
+var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
 func (e errMsg) Error() string { return e.err.Error() }
 
@@ -112,7 +117,13 @@ func initialModel(cfg Config) model {
 }
 
 func (m model) Init() tea.Cmd {
-	return m.runCommand()
+	return tea.Batch(m.runCommand(), m.spinnerTickCmd())
+}
+
+func (m model) spinnerTickCmd() tea.Cmd {
+	return tea.Tick(80*time.Millisecond, func(t time.Time) tea.Msg {
+		return spinnerTickMsg(t)
+	})
 }
 
 func (m model) runCommand() tea.Cmd {
@@ -146,9 +157,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		if m.config.RefreshSeconds > 0 {
+			m.loading = true
 			return m, tea.Batch(
 				m.runCommand(),
 				m.tickCmd(),
+				m.spinnerTickCmd(),
 			)
 		}
 		return m, nil
@@ -160,6 +173,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case clearStatusMsg:
 		m.statusMsg = ""
+		return m, nil
+
+	case spinnerTickMsg:
+		if m.loading {
+			m.spinnerFrame = (m.spinnerFrame + 1) % len(spinnerFrames)
+			return m, m.spinnerTickCmd()
+		}
 		return m, nil
 	}
 
@@ -239,7 +259,7 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.adjustOffset() // Keep selected line visible after preview toggle
 	case "r", "ctrl+r":
 		m.loading = true
-		return m, m.runCommand()
+		return m, tea.Batch(m.runCommand(), m.spinnerTickCmd())
 	case "/":
 		m.filterMode = true
 		m.filter = ""
@@ -648,7 +668,7 @@ func overlayBox(base string, box string, boxWidth, boxHeight, screenWidth, scree
 
 func (m model) View() string {
 	if m.width == 0 || m.height == 0 {
-		return "Loading..."
+		return spinnerFrames[m.spinnerFrame] + " Running command…"
 	}
 
 	// Render the main UI
@@ -763,7 +783,7 @@ func (m model) renderMainView() string {
 		promptLine = promptStyle.Render(m.config.Prompt)
 	}
 	if m.loading {
-		promptLine += " [loading...]"
+		promptLine += " " + spinnerFrames[m.spinnerFrame] + " Running command…"
 	}
 	if m.statusMsg != "" {
 		statusStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // green

@@ -1,6 +1,11 @@
 BIN := $(notdir $(CURDIR))
 
-all: run
+all:
+	@if [ ! -f ".git/hooks/pre-commit" ]; then \
+		$(MAKE) precommit-install; \
+	fi
+	$(MAKE) build
+	$(MAKE) run
 
 .PHONY: build
 build:

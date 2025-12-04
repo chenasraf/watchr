@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.3.0](https://github.com/chenasraf/watchr/compare/v1.2.0...v1.3.0) (2025-12-04)
+
+
+### Features
+
+* add exit status to command header ([51b9e92](https://github.com/chenasraf/watchr/commit/51b9e92ddd9766d109429878cc706761e1f46e47))
+* help overlay window ([cdd895d](https://github.com/chenasraf/watchr/commit/cdd895d19ac78b3bc34ccde7da9f2136b6661abd))
+
+
+### Bug Fixes
+
+* current line style ([5e1b807](https://github.com/chenasraf/watchr/commit/5e1b8071054c9727a5a8c3db85c88e1ede8e27d0))
+
 ## [1.2.0](https://github.com/chenasraf/watchr/compare/v1.1.0...v1.2.0) (2025-12-03)
 
 

@@ -310,16 +310,9 @@ func (m *model) adjustOffset() {
 	idealOffset := m.cursor - visible/2
 
 	// Clamp to valid range
-	if idealOffset < 0 {
-		idealOffset = 0
-	}
-	maxOffset := len(m.filtered) - visible
-	if maxOffset < 0 {
-		maxOffset = 0
-	}
-	if idealOffset > maxOffset {
-		idealOffset = maxOffset
-	}
+	idealOffset = max(idealOffset, 0)
+	maxOffset := max(len(m.filtered)-visible, 0)
+	idealOffset = min(idealOffset, maxOffset)
 
 	m.offset = idealOffset
 }
@@ -363,17 +356,17 @@ func truncateToWidth(s string, maxWidth int) string {
 	}
 
 	// Truncate rune by rune until we fit
-	result := ""
+	var result strings.Builder
 	currentWidth := 0
 	for _, r := range s {
 		runeWidth := lipgloss.Width(string(r))
 		if currentWidth+runeWidth > targetWidth {
 			break
 		}
-		result += string(r)
+		result.WriteRune(r)
 		currentWidth += runeWidth
 	}
-	return result + ellipsis
+	return result.String() + ellipsis
 }
 
 // wrapText wraps text to fit within the given width, returning multiple lines.
@@ -760,14 +753,15 @@ func (m model) renderMainView() string {
 	prefix := titleStyle.Render("watchr") + " • "
 
 	var commandLine string
-	if m.loading {
+	switch {
+	case m.loading:
 		// Still loading - no status yet
 		commandLine = prefix + m.config.Command
-	} else if m.exitCode == 0 {
+	case m.exitCode == 0:
 		// Success - green checkmark and green command
 		successStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // green
 		commandLine = prefix + successStyle.Render("✓ "+m.config.Command)
-	} else {
+	default:
 		// Failure - red cross with exit code and red command
 		failStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9")) // red
 		commandLine = prefix + failStyle.Render(fmt.Sprintf("✗ [%d] %s", m.exitCode, m.config.Command))
@@ -775,11 +769,12 @@ func (m model) renderMainView() string {
 
 	// Build prompt line (will go at bottom)
 	var promptLine string
-	if m.filterMode {
+	switch {
+	case m.filterMode:
 		promptLine = filterStyle.Render(fmt.Sprintf("/%s█", m.filter))
-	} else if m.filter != "" {
+	case m.filter != "":
 		promptLine = promptStyle.Render(fmt.Sprintf("%s (filter: %s)", m.config.Prompt, m.filter))
-	} else {
+	default:
 		promptLine = promptStyle.Render(m.config.Prompt)
 	}
 	if m.loading {
@@ -812,7 +807,7 @@ func (m model) renderMainView() string {
 
 	// Build lines view
 	var listLines []string
-	for i := 0; i < listHeight; i++ {
+	for i := range listHeight {
 		lineIdx := m.offset + i
 		if lineIdx >= len(m.filtered) {
 			// Empty line to fill space
@@ -871,7 +866,7 @@ func (m model) renderMainView() string {
 				// Pad to full width for selection highlight
 				padding := fullWidth - lipgloss.Width(lineText)
 				if padding > 0 {
-					lineText = lineText + strings.Repeat(" ", padding)
+					lineText += strings.Repeat(" ", padding)
 				}
 				lineText = selectedStyle.Render(lineText)
 			}
@@ -922,7 +917,7 @@ func (m model) renderMainView() string {
 	// Content area (with optional preview)
 	if !m.showPreview {
 		// Just content lines, padded to fill height
-		for i := 0; i < listHeight; i++ {
+		for i := range listHeight {
 			if i < len(listLines) {
 				lines = append(lines, padLine(listLines[i]))
 			} else {
@@ -953,7 +948,7 @@ func (m model) renderMainView() string {
 				// Separator (no vertical split for top/bottom preview)
 				lines = append(lines, hLine(leftT, rightT, 0))
 				// Then content, padded to fill height
-				for i := 0; i < listHeight; i++ {
+				for i := range listHeight {
 					if i < len(listLines) {
 						lines = append(lines, padLine(listLines[i]))
 					} else {
@@ -962,7 +957,7 @@ func (m model) renderMainView() string {
 				}
 			} else {
 				// Content first, padded to fill height
-				for i := 0; i < listHeight; i++ {
+				for i := range listHeight {
 					if i < len(listLines) {
 						lines = append(lines, padLine(listLines[i]))
 					} else {
@@ -1018,7 +1013,7 @@ func (m model) renderMainView() string {
 			}
 
 			// Build combined lines
-			for i := 0; i < listHeight; i++ {
+			for i := range listHeight {
 				var leftContent, rightContent string
 				var leftIsPreview, rightIsPreview bool
 

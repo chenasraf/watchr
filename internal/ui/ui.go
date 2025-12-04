@@ -544,24 +544,29 @@ func splitAtVisualWidth(s string, targetWidth int) (string, string) {
 }
 
 // skipVisualWidth skips a number of visual width units in a string, handling ANSI codes
+// It preserves and returns ANSI sequences encountered during skipping so styling can be restored
 func skipVisualWidth(s string, skipWidth int) string {
 	var result strings.Builder
+	var ansiState strings.Builder // collect ANSI codes while skipping
 	visualWidth := 0
 	runes := []rune(s)
 
 	i := 0
-	// Skip until we've passed skipWidth
+	// Skip until we've passed skipWidth, but collect ANSI codes
 	for i < len(runes) && visualWidth < skipWidth {
 		r := runes[i]
 
 		if r == '\x1b' {
-			// ANSI escape - skip it entirely (don't count, don't output)
+			// ANSI escape - collect it (don't count visual width)
+			ansiState.WriteRune(r)
 			i++
 			for i < len(runes) && !isAnsiTerminator(runes[i]) {
+				ansiState.WriteRune(runes[i])
 				i++
 			}
 			if i < len(runes) {
-				i++ // skip terminator
+				ansiState.WriteRune(runes[i]) // terminator
+				i++
 			}
 			continue
 		}
@@ -570,6 +575,9 @@ func skipVisualWidth(s string, skipWidth int) string {
 		visualWidth += runeWidth
 		i++
 	}
+
+	// Prepend collected ANSI state to restore styling
+	result.WriteString(ansiState.String())
 
 	// Output the rest
 	for ; i < len(runes); i++ {
@@ -585,6 +593,9 @@ func isAnsiTerminator(r rune) bool {
 
 // overlayBox composites an overlay box on top of a base view
 func overlayBox(base string, box string, boxWidth, boxHeight, screenWidth, screenHeight int) string {
+	// ANSI reset sequence to stop any styling from bleeding into overlay
+	const ansiReset = "\x1b[0m"
+
 	// Split base into lines
 	baseLines := strings.Split(base, "\n")
 
@@ -627,8 +638,9 @@ func overlayBox(base string, box string, boxWidth, boxHeight, screenWidth, scree
 			rightPart = skipVisualWidth(baseLine, endX)
 		}
 
-		// Combine: left + box + right
-		baseLines[y] = leftPart + boxLine + rightPart
+		// Combine: left + reset + box + right
+		// Reset before overlay to stop highlight bleeding into overlay
+		baseLines[y] = leftPart + ansiReset + boxLine + rightPart
 	}
 
 	return strings.Join(baseLines, "\n")
@@ -674,8 +686,8 @@ func (m model) renderMainView() string {
 		Foreground(lipgloss.Color("14"))
 
 	selectedStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color("236")).
-		Foreground(lipgloss.Color("15")).
+		Background(lipgloss.Color("15")).
+		Foreground(lipgloss.Color("#000000")).
 		Bold(true)
 
 	lineNumStyle := lipgloss.NewStyle().
@@ -796,6 +808,11 @@ func (m model) renderMainView() string {
 		line := m.lines[idx]
 
 		var lineText string
+		isSelected := lineIdx == m.cursor
+
+		// Full width including the padding space before border
+		fullWidth := listWidth + 1
+
 		if m.config.ShowLineNums {
 			// Calculate widths without ANSI codes first
 			lineNumStr := fmt.Sprintf("%*d  ", m.config.LineNumWidth, line.Number)
@@ -805,20 +822,39 @@ func (m model) renderMainView() string {
 			// Truncate content (no ANSI codes yet)
 			content := truncateToWidth(line.Content, contentWidth)
 
-			// Now apply styling
-			lineText = lineNumStyle.Render(lineNumStr) + content
+			if isSelected {
+				// For selected line: gray line number + black content, both on white background
+				selectedLineNumStyle := lipgloss.NewStyle().
+					Background(lipgloss.Color("15")).
+					Foreground(lipgloss.Color("241"))
+				selectedContentStyle := lipgloss.NewStyle().
+					Background(lipgloss.Color("15")).
+					Foreground(lipgloss.Color("#000000")).
+					Bold(true)
+
+				// Pad content to fill remaining width
+				contentPadded := content
+				padding := fullWidth - lineNumWidth - lipgloss.Width(content)
+				if padding > 0 {
+					contentPadded = content + strings.Repeat(" ", padding)
+				}
+				lineText = selectedLineNumStyle.Render(lineNumStr) + selectedContentStyle.Render(contentPadded)
+			} else {
+				// Normal line - style line numbers differently
+				lineText = lineNumStyle.Render(lineNumStr) + content
+			}
 		} else {
 			// No line numbers, just truncate content
 			lineText = truncateToWidth(line.Content, listWidth)
-		}
 
-		if lineIdx == m.cursor {
-			// Pad to full width for selection highlight
-			padding := listWidth - lipgloss.Width(lineText)
-			if padding > 0 {
-				lineText = lineText + strings.Repeat(" ", padding)
+			if isSelected {
+				// Pad to full width for selection highlight
+				padding := fullWidth - lipgloss.Width(lineText)
+				if padding > 0 {
+					lineText = lineText + strings.Repeat(" ", padding)
+				}
+				lineText = selectedStyle.Render(lineText)
 			}
-			lineText = selectedStyle.Render(lineText)
 		}
 
 		listLines = append(listLines, lineText)

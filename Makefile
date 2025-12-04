@@ -22,6 +22,10 @@ install: build
 uninstall:
 	rm -f ~/.local/bin/$(BIN)
 
+.PHONY: lint
+lint:
+	golangci-lint run ./...
+
 .PHONY: precommit-install
 precommit-install:
 	@echo "Installing pre-commit hooks..."

@@ -252,8 +252,8 @@ func TestVisibleLines(t *testing.T) {
 	m := initialModel(cfg)
 	m.height = 100
 
-	// Fixed lines: top border (1) + header (2) + separator (1) + bottom border (1) + prompt (1) = 6
-	fixedLines := 6
+	// Fixed lines: top border (1) + header (1) + separator (1) + bottom border (1) + prompt (1) = 5
+	fixedLines := 5
 
 	// Without preview
 	m.showPreview = false

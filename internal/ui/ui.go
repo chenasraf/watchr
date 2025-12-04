@@ -46,6 +46,7 @@ type model struct {
 	filter      string
 	filterMode  bool
 	showPreview bool
+	showHelp    bool // help overlay visible
 	width       int
 	height      int
 	runner      *runner.Runner
@@ -167,6 +168,15 @@ func (m model) tickCmd() tea.Cmd {
 }
 
 func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// In help mode, any key closes it
+	if m.showHelp {
+		switch msg.String() {
+		case "?", "esc", "q", "enter":
+			m.showHelp = false
+		}
+		return m, nil
+	}
+
 	// In filter mode, handle text input
 	if m.filterMode {
 		switch msg.Type {
@@ -228,6 +238,8 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "/":
 		m.filterMode = true
 		m.filter = ""
+	case "?":
+		m.showHelp = true
 	case "y":
 		// Yank (copy) selected line to clipboard
 		if len(m.filtered) > 0 && m.cursor >= 0 && m.cursor < len(m.filtered) {
@@ -298,8 +310,8 @@ func (m model) previewSize() int {
 }
 
 func (m model) visibleLines() int {
-	// Fixed lines: top border (1) + header (2) + separator (1) + bottom border (1) + prompt (1) = 6
-	fixedLines := 6
+	// Fixed lines: top border (1) + header (1) + separator (1) + bottom border (1) + prompt (1) = 5
+	fixedLines := 5
 	if m.showPreview && (m.config.PreviewPosition == PreviewTop || m.config.PreviewPosition == PreviewBottom) {
 		// Add preview height + separator between content and preview
 		return m.height - fixedLines - m.previewSize() - 1
@@ -392,11 +404,249 @@ func (m *model) updateFiltered() {
 	m.offset = 0
 }
 
+// renderHelpOverlay creates the help box content (without positioning)
+func (m model) renderHelpOverlay() (box string, boxWidth, boxHeight int) {
+	keyStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("10")) // green
+
+	descStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("252")) // light gray
+
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("12")) // blue
+
+	// Define keybindings
+	bindings := []struct {
+		key  string
+		desc string
+	}{
+		{"j / k", "Move down / up"},
+		{"g / G", "Go to first / last line"},
+		{"Ctrl+d / Ctrl+u", "Half page down / up"},
+		{"PgDn / PgUp", "Full page down / up"},
+		{"Ctrl+f / Ctrl+b", "Full page down / up"},
+		{"", ""},
+		{"p", "Toggle preview pane"},
+		{"/", "Enter filter mode"},
+		{"Esc", "Exit filter / clear"},
+		{"", ""},
+		{"r / Ctrl+r", "Reload command"},
+		{"y", "Copy line to clipboard"},
+		{"q / Esc", "Quit"},
+		{"?", "Toggle this help"},
+	}
+
+	// Build content
+	var content strings.Builder
+	content.WriteString(titleStyle.Render("Keybindings"))
+	content.WriteString("\n\n")
+
+	for _, b := range bindings {
+		if b.key == "" {
+			content.WriteString("\n")
+			continue
+		}
+		key := keyStyle.Render(fmt.Sprintf("%-18s", b.key))
+		desc := descStyle.Render(b.desc)
+		content.WriteString(fmt.Sprintf("  %s  %s\n", key, desc))
+	}
+
+	content.WriteString("\n")
+	content.WriteString(descStyle.Render("Press any key to close"))
+
+	// Create box style
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("12")).
+		Padding(1, 2)
+
+	box = boxStyle.Render(content.String())
+	boxWidth = lipgloss.Width(box)
+	boxHeight = lipgloss.Height(box)
+
+	return box, boxWidth, boxHeight
+}
+
+// splitAtVisualWidth splits a string at a visual width position, handling ANSI codes
+// Returns (left part, right part) where left has exactly targetWidth visual width
+func splitAtVisualWidth(s string, targetWidth int) (string, string) {
+	var left, right strings.Builder
+	visualWidth := 0
+	inEscape := false
+	runes := []rune(s)
+
+	i := 0
+	// Build left part up to targetWidth
+	for i < len(runes) && visualWidth < targetWidth {
+		r := runes[i]
+
+		if r == '\x1b' {
+			// Start of ANSI escape sequence - include it in left part
+			left.WriteRune(r)
+			i++
+			for i < len(runes) && !isAnsiTerminator(runes[i]) {
+				left.WriteRune(runes[i])
+				i++
+			}
+			if i < len(runes) {
+				left.WriteRune(runes[i]) // terminator
+				i++
+			}
+			continue
+		}
+
+		runeWidth := lipgloss.Width(string(r))
+		if visualWidth+runeWidth <= targetWidth {
+			left.WriteRune(r)
+			visualWidth += runeWidth
+			i++
+		} else {
+			break
+		}
+	}
+
+	// Pad left if needed
+	for visualWidth < targetWidth {
+		left.WriteRune(' ')
+		visualWidth++
+	}
+
+	// Skip runes in the "overlay zone" - we don't need them for right part calculation
+	// The caller will handle inserting the overlay content
+
+	// Build right part from remaining
+	for ; i < len(runes); i++ {
+		r := runes[i]
+		if r == '\x1b' {
+			right.WriteRune(r)
+			i++
+			for i < len(runes) && !isAnsiTerminator(runes[i]) {
+				right.WriteRune(runes[i])
+				i++
+			}
+			if i < len(runes) {
+				right.WriteRune(runes[i])
+			}
+			continue
+		}
+		right.WriteRune(r)
+	}
+
+	_ = inEscape // unused but kept for clarity
+	return left.String(), right.String()
+}
+
+// skipVisualWidth skips a number of visual width units in a string, handling ANSI codes
+func skipVisualWidth(s string, skipWidth int) string {
+	var result strings.Builder
+	visualWidth := 0
+	runes := []rune(s)
+
+	i := 0
+	// Skip until we've passed skipWidth
+	for i < len(runes) && visualWidth < skipWidth {
+		r := runes[i]
+
+		if r == '\x1b' {
+			// ANSI escape - skip it entirely (don't count, don't output)
+			i++
+			for i < len(runes) && !isAnsiTerminator(runes[i]) {
+				i++
+			}
+			if i < len(runes) {
+				i++ // skip terminator
+			}
+			continue
+		}
+
+		runeWidth := lipgloss.Width(string(r))
+		visualWidth += runeWidth
+		i++
+	}
+
+	// Output the rest
+	for ; i < len(runes); i++ {
+		result.WriteRune(runes[i])
+	}
+
+	return result.String()
+}
+
+func isAnsiTerminator(r rune) bool {
+	return (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z')
+}
+
+// overlayBox composites an overlay box on top of a base view
+func overlayBox(base string, box string, boxWidth, boxHeight, screenWidth, screenHeight int) string {
+	// Split base into lines
+	baseLines := strings.Split(base, "\n")
+
+	// Ensure we have enough lines
+	for len(baseLines) < screenHeight {
+		baseLines = append(baseLines, "")
+	}
+
+	// Split box into lines
+	boxLines := strings.Split(box, "\n")
+
+	// Calculate center position
+	startX := (screenWidth - boxWidth) / 2
+	startY := (screenHeight - boxHeight) / 2
+
+	if startX < 0 {
+		startX = 0
+	}
+	if startY < 0 {
+		startY = 0
+	}
+
+	// Overlay box onto base
+	for i, boxLine := range boxLines {
+		y := startY + i
+		if y >= len(baseLines) {
+			break
+		}
+
+		baseLine := baseLines[y]
+		baseVisualWidth := lipgloss.Width(baseLine)
+
+		// Get left part (before overlay)
+		leftPart, _ := splitAtVisualWidth(baseLine, startX)
+
+		// Get right part (after overlay)
+		endX := startX + boxWidth
+		var rightPart string
+		if endX < baseVisualWidth {
+			rightPart = skipVisualWidth(baseLine, endX)
+		}
+
+		// Combine: left + box + right
+		baseLines[y] = leftPart + boxLine + rightPart
+	}
+
+	return strings.Join(baseLines, "\n")
+}
+
 func (m model) View() string {
 	if m.width == 0 || m.height == 0 {
 		return "Loading..."
 	}
 
+	// Render the main UI
+	mainView := m.renderMainView()
+
+	// Overlay help if active
+	if m.showHelp {
+		box, boxWidth, boxHeight := m.renderHelpOverlay()
+		return overlayBox(mainView, box, boxWidth, boxHeight, m.width, m.height)
+	}
+
+	return mainView
+}
+
+func (m model) renderMainView() string {
 	// Box drawing characters (rounded)
 	const (
 		topLeft     = "╭"
@@ -415,10 +665,6 @@ func (m model) View() string {
 	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
 
 	// Styles
-	headerTextStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("12"))
-
 	promptStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("14"))
 
@@ -473,7 +719,6 @@ func (m model) View() string {
 	}
 
 	// Build header content
-	header := headerTextStyle.Render("r reload • q quit • j/k move • g/G first/last • ^d/u/f/b scroll • p preview • / filter • y yank")
 	commandLine := fmt.Sprintf("Command: %s", m.config.Command)
 
 	// Build prompt line (will go at bottom)
@@ -491,6 +736,15 @@ func (m model) View() string {
 	if m.statusMsg != "" {
 		statusStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // green
 		promptLine += " " + statusStyle.Render(m.statusMsg)
+	}
+
+	// Add help hint on the right
+	helpHint := lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render("? for help")
+	promptWidth := lipgloss.Width(promptLine)
+	hintWidth := lipgloss.Width(helpHint)
+	gap := m.width - promptWidth - hintWidth
+	if gap > 0 {
+		promptLine += strings.Repeat(" ", gap) + helpHint
 	}
 
 	// Calculate layout
@@ -583,8 +837,7 @@ func (m model) View() string {
 	// Top border (no junction - vertical split starts at header separator)
 	lines = append(lines, hLine(topLeft, topRight, 0))
 
-	// Header lines
-	lines = append(lines, padLine(header))
+	// Header line (command only)
 	lines = append(lines, padLine(commandLine))
 
 	// Separator between header and content (T junction if vertical split)

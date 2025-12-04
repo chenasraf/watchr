@@ -38,22 +38,28 @@ func NewRunner(shell, command string) *Runner {
 	}
 }
 
-// Run executes the command and returns output lines
-func (r *Runner) Run(ctx context.Context) ([]Line, error) {
+// Result contains the output and exit code of a command run
+type Result struct {
+	Lines    []Line
+	ExitCode int
+}
+
+// Run executes the command and returns output lines with exit code
+func (r *Runner) Run(ctx context.Context) (Result, error) {
 	cmd := exec.CommandContext(ctx, r.Shell, "-c", r.Command)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
+		return Result{}, fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
+		return Result{}, fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
 
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start command: %w", err)
+		return Result{}, fmt.Errorf("failed to start command: %w", err)
 	}
 
 	var lines []Line
@@ -79,10 +85,15 @@ func (r *Runner) Run(ctx context.Context) ([]Line, error) {
 		lineNum++
 	}
 
-	// Wait for command to finish (ignore exit code - we still want to show output)
-	_ = cmd.Wait()
+	// Wait for command to finish and get exit code
+	exitCode := 0
+	if err := cmd.Wait(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		}
+	}
 
-	return lines, nil
+	return Result{Lines: lines, ExitCode: exitCode}, nil
 }
 
 // RunStreaming executes the command and streams output lines to the callback

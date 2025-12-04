@@ -52,17 +52,17 @@ func TestRunner_Run(t *testing.T) {
 			r := NewRunner(tt.shell, tt.command)
 			ctx := context.Background()
 
-			lines, err := r.Run(ctx)
+			result, err := r.Run(ctx)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			if len(lines) != tt.wantLines {
-				t.Errorf("expected %d lines, got %d", tt.wantLines, len(lines))
+			if len(result.Lines) != tt.wantLines {
+				t.Errorf("expected %d lines, got %d", tt.wantLines, len(result.Lines))
 			}
 
-			if tt.wantLines > 0 && lines[0].Content != tt.wantContent {
-				t.Errorf("expected first line %q, got %q", tt.wantContent, lines[0].Content)
+			if tt.wantLines > 0 && result.Lines[0].Content != tt.wantContent {
+				t.Errorf("expected first line %q, got %q", tt.wantContent, result.Lines[0].Content)
 			}
 		})
 	}
@@ -103,13 +103,17 @@ func TestRunner_RunWithFailingCommand(t *testing.T) {
 	ctx := context.Background()
 
 	// Should not return error for non-zero exit, just empty output
-	lines, err := r.Run(ctx)
+	result, err := r.Run(ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(lines) != 0 {
-		t.Errorf("expected 0 lines for exit 1, got %d", len(lines))
+	if len(result.Lines) != 0 {
+		t.Errorf("expected 0 lines for exit 1, got %d", len(result.Lines))
+	}
+
+	if result.ExitCode != 1 {
+		t.Errorf("expected exit code 1, got %d", result.ExitCode)
 	}
 }
 
@@ -117,17 +121,21 @@ func TestRunner_RunWithOutputAndError(t *testing.T) {
 	r := NewRunner("sh", "echo 'output'; exit 1")
 	ctx := context.Background()
 
-	lines, err := r.Run(ctx)
+	result, err := r.Run(ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(lines) != 1 {
-		t.Fatalf("expected 1 line, got %d", len(lines))
+	if len(result.Lines) != 1 {
+		t.Fatalf("expected 1 line, got %d", len(result.Lines))
 	}
 
-	if lines[0].Content != "output" {
-		t.Errorf("expected 'output', got %q", lines[0].Content)
+	if result.Lines[0].Content != "output" {
+		t.Errorf("expected 'output', got %q", result.Lines[0].Content)
+	}
+
+	if result.ExitCode != 1 {
+		t.Errorf("expected exit code 1, got %d", result.ExitCode)
 	}
 }
 

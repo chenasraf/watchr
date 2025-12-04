@@ -55,10 +55,14 @@ type model struct {
 	loading     bool
 	errorMsg    string
 	statusMsg   string // temporary status message (e.g., "Yanked!")
+	exitCode    int    // last command exit code
 }
 
 // messages
-type linesMsg []runner.Line
+type resultMsg struct {
+	lines    []runner.Line
+	exitCode int
+}
 type errMsg struct{ err error }
 type tickMsg time.Time
 type clearStatusMsg struct{}
@@ -115,11 +119,11 @@ func (m model) runCommand() tea.Cmd {
 	r := m.runner
 	ctx := m.ctx
 	return func() tea.Msg {
-		lines, err := r.Run(ctx)
+		result, err := r.Run(ctx)
 		if err != nil {
 			return errMsg{err}
 		}
-		return linesMsg(lines)
+		return resultMsg{lines: result.Lines, exitCode: result.ExitCode}
 	}
 }
 
@@ -133,8 +137,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 
-	case linesMsg:
-		m.lines = []runner.Line(msg)
+	case resultMsg:
+		m.lines = msg.lines
+		m.exitCode = msg.exitCode
 		m.loading = false
 		m.updateFiltered()
 		return m, nil
@@ -718,8 +723,23 @@ func (m model) renderMainView() string {
 		return borderStyle.Render(vertical) + content + borderStyle.Render(vertical)
 	}
 
-	// Build header content
-	commandLine := fmt.Sprintf("Command: %s", m.config.Command)
+	// Build header content with status indicator
+	titleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true) // blue
+	prefix := titleStyle.Render("watchr") + " • "
+
+	var commandLine string
+	if m.loading {
+		// Still loading - no status yet
+		commandLine = prefix + m.config.Command
+	} else if m.exitCode == 0 {
+		// Success - green checkmark and green command
+		successStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // green
+		commandLine = prefix + successStyle.Render("✓ "+m.config.Command)
+	} else {
+		// Failure - red cross with exit code and red command
+		failStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9")) // red
+		commandLine = prefix + failStyle.Render(fmt.Sprintf("✗ [%d] %s", m.exitCode, m.config.Command))
+	}
 
 	// Build prompt line (will go at bottom)
 	var promptLine string

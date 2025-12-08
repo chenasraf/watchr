@@ -19,6 +19,7 @@ const (
 	KeyLineWidth       = "line-width"
 	KeyPrompt          = "prompt"
 	KeyRefresh         = "refresh"
+	KeyInteractive     = "interactive"
 )
 
 // setDefaults sets the default configuration values.
@@ -30,6 +31,7 @@ func setDefaults() {
 	viper.SetDefault(KeyLineWidth, 6)
 	viper.SetDefault(KeyPrompt, "watchr> ")
 	viper.SetDefault(KeyRefresh, 0)
+	viper.SetDefault(KeyInteractive, false)
 }
 
 // Init initializes Viper with config file paths and defaults.
@@ -74,6 +76,7 @@ func BindFlags(flags *pflag.FlagSet) {
 	_ = viper.BindPFlag(KeyLineWidth, flags.Lookup("line-width"))
 	_ = viper.BindPFlag(KeyPrompt, flags.Lookup("prompt"))
 	_ = viper.BindPFlag(KeyRefresh, flags.Lookup("refresh"))
+	_ = viper.BindPFlag(KeyInteractive, flags.Lookup("interactive"))
 
 	// line-numbers is inverted (no-line-numbers flag)
 	_ = viper.BindPFlag("no-line-numbers", flags.Lookup("no-line-numbers"))
@@ -127,6 +130,7 @@ func PrintConfig() {
 	fmt.Printf("  %-20s %d\n", KeyLineWidth+":", GetInt(KeyLineWidth))
 	fmt.Printf("  %-20s %q\n", KeyPrompt+":", GetString(KeyPrompt))
 	fmt.Printf("  %-20s %d\n", KeyRefresh+":", GetInt(KeyRefresh))
+	fmt.Printf("  %-20s %v\n", KeyInteractive+":", GetBool(KeyInteractive))
 }
 
 // getConfigDir returns the appropriate config directory for the OS.

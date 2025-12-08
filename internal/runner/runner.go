@@ -5,7 +5,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -26,15 +28,82 @@ func (l Line) FormatLine(width int, showLineNum bool) string {
 
 // Runner executes commands and captures output
 type Runner struct {
-	Shell   string
-	Command string
+	Shell       string
+	Command     string
+	Interactive bool
 }
 
 // NewRunner creates a new Runner
 func NewRunner(shell, command string) *Runner {
 	return &Runner{
-		Shell:   shell,
-		Command: command,
+		Shell:       shell,
+		Command:     command,
+		Interactive: false,
+	}
+}
+
+// NewInteractiveRunner creates a new Runner that sources shell rc files
+func NewInteractiveRunner(shell, command string) *Runner {
+	return &Runner{
+		Shell:       shell,
+		Command:     command,
+		Interactive: true,
+	}
+}
+
+// buildCommand returns the shell arguments for executing the command.
+// If Interactive is true, it wraps the command to source the appropriate rc file.
+func (r *Runner) buildCommand() []string {
+	if !r.Interactive {
+		return []string{"-c", r.Command}
+	}
+
+	// For interactive mode, source the appropriate rc file before running the command
+	rcFile := r.getRCFile()
+	if rcFile != "" {
+		// Source the rc file if it exists, then run the command
+		wrappedCmd := fmt.Sprintf("[ -f %s ] && . %s; %s", rcFile, rcFile, r.Command)
+		return []string{"-c", wrappedCmd}
+	}
+
+	return []string{"-c", r.Command}
+}
+
+// getRCFile returns the path to the shell's rc file based on the shell being used.
+func (r *Runner) getRCFile() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+
+	shellBase := filepath.Base(r.Shell)
+	switch shellBase {
+	case "bash":
+		// Prefer .bashrc for interactive settings, fall back to .bash_profile
+		bashrc := filepath.Join(home, ".bashrc")
+		if _, err := os.Stat(bashrc); err == nil {
+			return bashrc
+		}
+		return filepath.Join(home, ".bash_profile")
+	case "zsh":
+		return filepath.Join(home, ".zshrc")
+	case "fish":
+		configDir := os.Getenv("XDG_CONFIG_HOME")
+		if configDir == "" {
+			configDir = filepath.Join(home, ".config")
+		}
+		return filepath.Join(configDir, "fish", "config.fish")
+	case "ksh":
+		return filepath.Join(home, ".kshrc")
+	case "sh":
+		// POSIX sh uses ENV variable or .profile
+		if env := os.Getenv("ENV"); env != "" {
+			return env
+		}
+		return filepath.Join(home, ".profile")
+	default:
+		// Try common patterns for unknown shells
+		return filepath.Join(home, "."+shellBase+"rc")
 	}
 }
 
@@ -46,7 +115,8 @@ type Result struct {
 
 // Run executes the command and returns output lines with exit code
 func (r *Runner) Run(ctx context.Context) (Result, error) {
-	cmd := exec.CommandContext(ctx, r.Shell, "-c", r.Command)
+	args := r.buildCommand()
+	cmd := exec.CommandContext(ctx, r.Shell, args...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -99,7 +169,8 @@ func (r *Runner) Run(ctx context.Context) (Result, error) {
 // RunStreaming executes the command and streams output lines to the callback
 // The callback is called for each line as it arrives
 func (r *Runner) RunStreaming(ctx context.Context, lines *[]Line, mu *sync.RWMutex) error {
-	cmd := exec.CommandContext(ctx, r.Shell, "-c", r.Command)
+	args := r.buildCommand()
+	cmd := exec.CommandContext(ctx, r.Shell, args...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -148,7 +219,8 @@ func (r *Runner) RunStreaming(ctx context.Context, lines *[]Line, mu *sync.RWMut
 
 // RunSimple executes the command and returns output as string slice
 func (r *Runner) RunSimple(ctx context.Context) ([]string, error) {
-	cmd := exec.CommandContext(ctx, r.Shell, "-c", r.Command)
+	args := r.buildCommand()
+	cmd := exec.CommandContext(ctx, r.Shell, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Still return output even on error (non-zero exit)

@@ -34,6 +34,7 @@ type Config struct {
 	LineNumWidth         int
 	Prompt               string
 	RefreshSeconds       int
+	Interactive          bool
 }
 
 // model represents the application state
@@ -100,6 +101,14 @@ func copyToClipboard(text string) error {
 
 func initialModel(cfg Config) model {
 	ctx, cancel := context.WithCancel(context.Background())
+
+	var r *runner.Runner
+	if cfg.Interactive {
+		r = runner.NewInteractiveRunner(cfg.Shell, cfg.Command)
+	} else {
+		r = runner.NewRunner(cfg.Shell, cfg.Command)
+	}
+
 	return model{
 		config:      cfg,
 		lines:       []runner.Line{},
@@ -109,7 +118,7 @@ func initialModel(cfg Config) model {
 		filter:      "",
 		filterMode:  false,
 		showPreview: false,
-		runner:      runner.NewRunner(cfg.Shell, cfg.Command),
+		runner:      r,
 		ctx:         ctx,
 		cancel:      cancel,
 		loading:     true,

@@ -35,6 +35,7 @@ func main() {
 	flag.StringP("prompt", "p", "watchr> ", "Prompt string")
 	flag.StringP("shell", "s", "sh", "Shell to use for executing commands")
 	flag.IntP("refresh", "r", 0, "Auto-refresh interval in seconds (0 = disabled)")
+	flag.BoolP("interactive", "i", false, "Run shell in interactive mode (sources ~/.bashrc, ~/.zshrc, etc.)")
 
 	printUsage := func(w *os.File) {
 		_, _ = fmt.Fprintf(w, "Usage: watchr [options] <command to run>\n\n")
@@ -109,6 +110,7 @@ func main() {
 	prompt := config.GetString(config.KeyPrompt)
 	refreshSeconds := config.GetInt(config.KeyRefresh)
 	showLineNums := config.ShowLineNumbers()
+	interactive := config.GetBool(config.KeyInteractive)
 
 	// Parse preview size (e.g., "40" for lines/cols, "40%" for percentage)
 	previewSizeIsPercent := strings.HasSuffix(previewSize, "%")
@@ -129,6 +131,7 @@ func main() {
 		LineNumWidth:         lineNumWidth,
 		Prompt:               prompt,
 		RefreshSeconds:       refreshSeconds,
+		Interactive:          interactive,
 	}
 
 	if err := ui.Run(uiConfig); err != nil {

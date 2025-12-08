@@ -14,6 +14,97 @@ func TestNewRunner(t *testing.T) {
 	if r.Command != "echo hello" {
 		t.Errorf("expected command 'echo hello', got %q", r.Command)
 	}
+	if r.Interactive {
+		t.Errorf("expected Interactive to be false for NewRunner")
+	}
+}
+
+func TestNewInteractiveRunner(t *testing.T) {
+	r := NewInteractiveRunner("bash", "my_func")
+	if r.Shell != "bash" {
+		t.Errorf("expected shell 'bash', got %q", r.Shell)
+	}
+	if r.Command != "my_func" {
+		t.Errorf("expected command 'my_func', got %q", r.Command)
+	}
+	if !r.Interactive {
+		t.Errorf("expected Interactive to be true for NewInteractiveRunner")
+	}
+}
+
+func TestRunner_buildCommand(t *testing.T) {
+	tests := []struct {
+		name        string
+		shell       string
+		command     string
+		interactive bool
+		wantFirst   string
+	}{
+		{
+			name:        "non-interactive",
+			shell:       "sh",
+			command:     "echo hello",
+			interactive: false,
+			wantFirst:   "-c",
+		},
+		{
+			name:        "interactive bash",
+			shell:       "bash",
+			command:     "my_func",
+			interactive: true,
+			wantFirst:   "-c",
+		},
+		{
+			name:        "interactive zsh",
+			shell:       "/bin/zsh",
+			command:     "my_alias",
+			interactive: true,
+			wantFirst:   "-c",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var r *Runner
+			if tt.interactive {
+				r = NewInteractiveRunner(tt.shell, tt.command)
+			} else {
+				r = NewRunner(tt.shell, tt.command)
+			}
+
+			args := r.buildCommand()
+			if len(args) != 2 {
+				t.Fatalf("expected 2 args, got %d", len(args))
+			}
+			if args[0] != tt.wantFirst {
+				t.Errorf("expected first arg %q, got %q", tt.wantFirst, args[0])
+			}
+
+			// For interactive mode, the command should contain sourcing logic
+			if tt.interactive {
+				if !contains(args[1], tt.command) {
+					t.Errorf("expected command %q to be in args[1] %q", tt.command, args[1])
+				}
+			} else {
+				if args[1] != tt.command {
+					t.Errorf("expected args[1] to be %q, got %q", tt.command, args[1])
+				}
+			}
+		})
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
+}
+
+func containsHelper(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
 
 func TestRunner_Run(t *testing.T) {

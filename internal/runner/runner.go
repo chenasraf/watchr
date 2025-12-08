@@ -117,6 +117,7 @@ type Result struct {
 func (r *Runner) Run(ctx context.Context) (Result, error) {
 	args := r.buildCommand()
 	cmd := exec.CommandContext(ctx, r.Shell, args...)
+	cmd.Env = append(os.Environ(), "WATCHR=1")
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -166,61 +167,140 @@ func (r *Runner) Run(ctx context.Context) (Result, error) {
 	return Result{Lines: lines, ExitCode: exitCode}, nil
 }
 
-// RunStreaming executes the command and streams output lines to the callback
-// The callback is called for each line as it arrives
-func (r *Runner) RunStreaming(ctx context.Context, lines *[]Line, mu *sync.RWMutex) error {
-	args := r.buildCommand()
-	cmd := exec.CommandContext(ctx, r.Shell, args...)
+// StreamingResult holds the state of a streaming command
+type StreamingResult struct {
+	Lines    *[]Line
+	ExitCode int
+	Done     bool
+	Error    error
+	mu       sync.RWMutex
+}
 
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("failed to create stdout pipe: %w", err)
+// GetLines returns a copy of the current lines (thread-safe)
+func (s *StreamingResult) GetLines() []Line {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.Lines == nil {
+		return nil
+	}
+	result := make([]Line, len(*s.Lines))
+	copy(result, *s.Lines)
+	return result
+}
+
+// LineCount returns the current number of lines (thread-safe)
+func (s *StreamingResult) LineCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.Lines == nil {
+		return 0
+	}
+	return len(*s.Lines)
+}
+
+// IsDone returns whether the command has finished (thread-safe)
+func (s *StreamingResult) IsDone() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.Done
+}
+
+// RunStreaming executes the command and streams output lines in the background.
+// Returns a StreamingResult that can be polled for updates.
+// The command runs until ctx is cancelled or it completes naturally.
+func (r *Runner) RunStreaming(ctx context.Context) *StreamingResult {
+	result := &StreamingResult{
+		Lines:    &[]Line{},
+		ExitCode: -1,
+		Done:     false,
 	}
 
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return fmt.Errorf("failed to create stderr pipe: %w", err)
-	}
+	go func() {
+		args := r.buildCommand()
+		cmd := exec.CommandContext(ctx, r.Shell, args...)
+		cmd.Env = append(os.Environ(), "WATCHR=1")
 
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start command: %w", err)
-	}
-
-	lineNum := 1
-
-	// Read from both stdout and stderr concurrently
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	readPipe := func(pipe io.Reader) {
-		defer wg.Done()
-		scanner := bufio.NewScanner(pipe)
-		for scanner.Scan() {
-			mu.Lock()
-			*lines = append(*lines, Line{
-				Number:  lineNum,
-				Content: scanner.Text(),
-			})
-			lineNum++
-			mu.Unlock()
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			result.mu.Lock()
+			result.Error = fmt.Errorf("failed to create stdout pipe: %w", err)
+			result.Done = true
+			result.mu.Unlock()
+			return
 		}
-	}
 
-	go readPipe(stdout)
-	go readPipe(stderr)
+		stderr, err := cmd.StderrPipe()
+		if err != nil {
+			result.mu.Lock()
+			result.Error = fmt.Errorf("failed to create stderr pipe: %w", err)
+			result.Done = true
+			result.mu.Unlock()
+			return
+		}
 
-	wg.Wait()
+		if err := cmd.Start(); err != nil {
+			result.mu.Lock()
+			result.Error = fmt.Errorf("failed to start command: %w", err)
+			result.Done = true
+			result.mu.Unlock()
+			return
+		}
 
-	// Wait for command to finish (ignore exit code - we still want to show output)
-	_ = cmd.Wait()
+		lineNum := 1
+		var lineNumMu sync.Mutex
 
-	return nil
+		// Read from both stdout and stderr concurrently
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		readPipe := func(pipe io.Reader) {
+			defer wg.Done()
+			scanner := bufio.NewScanner(pipe)
+			for scanner.Scan() {
+				lineNumMu.Lock()
+				currentLineNum := lineNum
+				lineNum++
+				lineNumMu.Unlock()
+
+				result.mu.Lock()
+				*result.Lines = append(*result.Lines, Line{
+					Number:  currentLineNum,
+					Content: scanner.Text(),
+				})
+				result.mu.Unlock()
+			}
+		}
+
+		go readPipe(stdout)
+		go readPipe(stderr)
+
+		wg.Wait()
+
+		// Wait for command to finish and get exit code
+		exitCode := 0
+		if err := cmd.Wait(); err != nil {
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				exitCode = exitErr.ExitCode()
+			} else if ctx.Err() != nil {
+				// Context was cancelled
+				exitCode = -1
+			}
+		}
+
+		result.mu.Lock()
+		result.ExitCode = exitCode
+		result.Done = true
+		result.mu.Unlock()
+	}()
+
+	return result
 }
 
 // RunSimple executes the command and returns output as string slice
 func (r *Runner) RunSimple(ctx context.Context) ([]string, error) {
 	args := r.buildCommand()
 	cmd := exec.CommandContext(ctx, r.Shell, args...)
+	cmd.Env = append(os.Environ(), "WATCHR=1")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Still return output even on error (non-zero exit)

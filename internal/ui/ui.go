@@ -39,25 +39,28 @@ type Config struct {
 
 // model represents the application state
 type model struct {
-	config       Config
-	lines        []runner.Line
-	filtered     []int // indices into lines that match filter
-	cursor       int   // cursor position in filtered list
-	offset       int   // scroll offset for visible window
-	filter       string
-	filterMode   bool
-	showPreview  bool
-	showHelp     bool // help overlay visible
-	width        int
-	height       int
-	runner       *runner.Runner
-	ctx          context.Context
-	cancel       context.CancelFunc
-	loading      bool
-	spinnerFrame int // current spinner animation frame
-	errorMsg     string
-	statusMsg    string // temporary status message (e.g., "Yanked!")
-	exitCode     int    // last command exit code
+	config        Config
+	lines         []runner.Line
+	filtered      []int // indices into lines that match filter
+	cursor        int   // cursor position in filtered list
+	offset        int   // scroll offset for visible window
+	filter        string
+	filterMode    bool
+	showPreview   bool
+	showHelp      bool // help overlay visible
+	width         int
+	height        int
+	runner        *runner.Runner
+	ctx           context.Context
+	cancel        context.CancelFunc
+	loading       bool
+	streaming     bool                    // true while command is running (streaming output)
+	streamResult  *runner.StreamingResult // current streaming result
+	lastLineCount int                     // track line count for updates
+	spinnerFrame  int                     // current spinner animation frame
+	errorMsg      string
+	statusMsg     string // temporary status message (e.g., "Yanked!")
+	exitCode      int    // last command exit code
 }
 
 // messages
@@ -69,6 +72,8 @@ type errMsg struct{ err error }
 type tickMsg time.Time
 type clearStatusMsg struct{}
 type spinnerTickMsg time.Time
+type streamTickMsg time.Time // periodic check for streaming updates
+type startStreamMsg struct{} // trigger to start streaming
 
 // Spinner frames for the loading animation
 var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
@@ -125,8 +130,11 @@ func initialModel(cfg Config) model {
 	}
 }
 
-func (m model) Init() tea.Cmd {
-	return tea.Batch(m.runCommand(), m.spinnerTickCmd())
+func (m *model) Init() tea.Cmd {
+	// Send a message to start streaming (handled in Update with pointer receiver)
+	return func() tea.Msg {
+		return startStreamMsg{}
+	}
 }
 
 func (m model) spinnerTickCmd() tea.Cmd {
@@ -135,19 +143,30 @@ func (m model) spinnerTickCmd() tea.Cmd {
 	})
 }
 
-func (m model) runCommand() tea.Cmd {
-	r := m.runner
-	ctx := m.ctx
-	return func() tea.Msg {
-		result, err := r.Run(ctx)
-		if err != nil {
-			return errMsg{err}
-		}
-		return resultMsg{lines: result.Lines, exitCode: result.ExitCode}
-	}
+func (m model) streamTickCmd() tea.Cmd {
+	return tea.Tick(50*time.Millisecond, func(t time.Time) tea.Msg {
+		return streamTickMsg(t)
+	})
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *model) startStreaming() tea.Cmd {
+	// Cancel any existing context and create a new one
+	if m.cancel != nil {
+		m.cancel()
+	}
+	m.ctx, m.cancel = context.WithCancel(context.Background())
+
+	m.streamResult = m.runner.RunStreaming(m.ctx)
+	m.streaming = true
+	m.loading = true
+	m.lastLineCount = 0
+	m.exitCode = -1
+	m.errorMsg = ""
+
+	return m.streamTickCmd()
+}
+
+func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		return m.handleKeyPress(msg)
@@ -157,27 +176,64 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 
+	case startStreamMsg:
+		cmd := m.startStreaming()
+		return m, tea.Batch(cmd, m.spinnerTickCmd())
+
 	case resultMsg:
 		m.lines = msg.lines
 		m.exitCode = msg.exitCode
 		m.loading = false
+		m.streaming = false
 		m.updateFiltered()
 		return m, nil
 
+	case streamTickMsg:
+		if m.streamResult == nil {
+			return m, nil
+		}
+
+		// Check for new lines
+		newLines := m.streamResult.GetLines()
+		newCount := len(newLines)
+
+		if newCount != m.lastLineCount {
+			m.lines = newLines
+			m.lastLineCount = newCount
+			m.updateFiltered()
+		}
+
+		// Check if command completed
+		if m.streamResult.IsDone() {
+			m.streaming = false
+			m.loading = false
+			m.exitCode = m.streamResult.ExitCode
+			if m.streamResult.Error != nil {
+				m.errorMsg = m.streamResult.Error.Error()
+			}
+
+			// If auto-refresh is enabled, schedule the next run
+			if m.config.RefreshSeconds > 0 {
+				return m, m.tickCmd()
+			}
+			return m, nil
+		}
+
+		// Continue streaming
+		return m, m.streamTickCmd()
+
 	case tickMsg:
-		if m.config.RefreshSeconds > 0 {
-			m.loading = true
-			return m, tea.Batch(
-				m.runCommand(),
-				m.tickCmd(),
-				m.spinnerTickCmd(),
-			)
+		if m.config.RefreshSeconds > 0 && !m.streaming {
+			// Restart streaming for refresh
+			cmd := m.startStreaming()
+			return m, tea.Batch(cmd, m.spinnerTickCmd())
 		}
 		return m, nil
 
 	case errMsg:
 		m.errorMsg = msg.Error()
 		m.loading = false
+		m.streaming = false
 		return m, nil
 
 	case clearStatusMsg:
@@ -185,7 +241,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case spinnerTickMsg:
-		if m.loading {
+		if m.loading || m.streaming {
 			m.spinnerFrame = (m.spinnerFrame + 1) % len(spinnerFrames)
 			return m, m.spinnerTickCmd()
 		}
@@ -267,8 +323,9 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.showPreview = !m.showPreview
 		m.adjustOffset() // Keep selected line visible after preview toggle
 	case "r", "ctrl+r":
-		m.loading = true
-		return m, tea.Batch(m.runCommand(), m.spinnerTickCmd())
+		// Restart streaming
+		cmd := m.startStreaming()
+		return m, tea.Batch(cmd, m.spinnerTickCmd())
 	case "/":
 		m.filterMode = true
 		m.filter = ""
@@ -668,7 +725,7 @@ func overlayBox(base string, box string, boxWidth, boxHeight, screenWidth, scree
 	return strings.Join(baseLines, "\n")
 }
 
-func (m model) View() string {
+func (m *model) View() string {
 	if m.width == 0 || m.height == 0 {
 		return spinnerFrames[m.spinnerFrame] + " Running command…"
 	}
@@ -763,6 +820,10 @@ func (m model) renderMainView() string {
 
 	var commandLine string
 	switch {
+	case m.streaming:
+		// Streaming - show streaming indicator
+		streamStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("14")) // cyan
+		commandLine = prefix + streamStyle.Render("◉ "+m.config.Command)
 	case m.loading:
 		// Still loading - no status yet
 		commandLine = prefix + m.config.Command
@@ -786,7 +847,9 @@ func (m model) renderMainView() string {
 	default:
 		promptLine = promptStyle.Render(m.config.Prompt)
 	}
-	if m.loading {
+	if m.streaming {
+		promptLine += " " + spinnerFrames[m.spinnerFrame] + " Streaming…"
+	} else if m.loading {
 		promptLine += " " + spinnerFrames[m.spinnerFrame] + " Running command…"
 	}
 	if m.statusMsg != "" {
@@ -1065,7 +1128,7 @@ func Run(cfg Config) error {
 	}
 
 	m := initialModel(cfg)
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(&m, tea.WithAltScreen())
 
 	_, err := p.Run()
 	return err

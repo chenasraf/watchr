@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.4.0](https://github.com/chenasraf/watchr/compare/v1.3.0...v1.4.0) (2025-12-08)
+
+
+### Features
+
+* add -i/--interactive mode ([9ecf9f7](https://github.com/chenasraf/watchr/commit/9ecf9f74b7e8271dc8f8d2e6e2fc562e87be9953))
+* add spinning loader animation ([ed2f24c](https://github.com/chenasraf/watchr/commit/ed2f24c0e820ebaa37f46cc2407648c3e8b1cbbd))
+* properly support streaming commands ([66c6599](https://github.com/chenasraf/watchr/commit/66c65995068181d4b4ae74087eb0c15e1ab0edb4))
+
 ## [1.3.0](https://github.com/chenasraf/watchr/compare/v1.2.0...v1.3.0) (2025-12-04)
 
 

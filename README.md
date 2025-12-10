@@ -97,6 +97,7 @@ Options:
   -w, --line-width int             Line number width (default 6)
   -P, --preview-size string        Preview size: number for lines/cols, or number% for percentage (default "40%")
   -o, --preview-position string    Preview position: bottom, top, left, right (default "bottom")
+  -i, --interactive                Run shell in interactive mode (sources ~/.bashrc, ~/.zshrc, etc.)
 ```
 
 ---
@@ -124,6 +125,7 @@ line-numbers: true
 line-width: 4
 prompt: "> "
 refresh: 0
+interactive: false
 ```
 
 **TOML** (`watchr.toml`):
@@ -135,6 +137,7 @@ line-numbers = true
 line-width = 4
 prompt = "> "
 refresh = 0
+interactive = false
 ```
 
 **JSON** (`watchr.json`):
@@ -146,7 +149,8 @@ refresh = 0
   "line-numbers": true,
   "line-width": 4,
   "prompt": "> ",
-  "refresh": 0
+  "refresh": 0,
+  "interactive": false
 }
 ```
 

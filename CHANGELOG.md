@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/chenasraf/watchr/compare/v1.4.0...v1.5.0) (2025-12-14)
+
+
+### Features
+
+* add more refresh duration options & formats ([f15b9e2](https://github.com/chenasraf/watchr/commit/f15b9e255988b5b754c377e3ae29f9eb4c8a1925))
+
 ## [1.4.0](https://github.com/chenasraf/watchr/compare/v1.3.0...v1.4.0) (2025-12-08)
 
 

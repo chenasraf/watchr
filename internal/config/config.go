@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strconv"
+	"time"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -30,7 +33,7 @@ func setDefaults() {
 	viper.SetDefault(KeyLineNumbers, true)
 	viper.SetDefault(KeyLineWidth, 6)
 	viper.SetDefault(KeyPrompt, "watchr> ")
-	viper.SetDefault(KeyRefresh, 0)
+	viper.SetDefault(KeyRefresh, "0")
 	viper.SetDefault(KeyInteractive, false)
 }
 
@@ -129,7 +132,7 @@ func PrintConfig() {
 	fmt.Printf("  %-20s %v\n", KeyLineNumbers+":", GetBool(KeyLineNumbers))
 	fmt.Printf("  %-20s %d\n", KeyLineWidth+":", GetInt(KeyLineWidth))
 	fmt.Printf("  %-20s %q\n", KeyPrompt+":", GetString(KeyPrompt))
-	fmt.Printf("  %-20s %d\n", KeyRefresh+":", GetInt(KeyRefresh))
+	fmt.Printf("  %-20s %s\n", KeyRefresh+":", GetString(KeyRefresh))
 	fmt.Printf("  %-20s %v\n", KeyInteractive+":", GetBool(KeyInteractive))
 }
 
@@ -148,4 +151,58 @@ func getConfigDir() string {
 		}
 		return ""
 	}
+}
+
+// durationRegex matches duration strings like "1", "1.5", "500ms", "1s", "1.5s", "5m", "1h"
+var durationRegex = regexp.MustCompile(`^(\d+(?:\.\d+)?)(ms|s|m|h)?$`)
+
+// ParseDuration parses a duration string into a time.Duration.
+// Supported formats:
+//   - "1", "1.5" - interpreted as seconds (default unit)
+//   - "1s", "1.5s" - explicit seconds
+//   - "500ms", "1500ms" - explicit milliseconds
+//   - "5m", "1.5m" - explicit minutes
+//   - "1h", "0.5h" - explicit hours
+//
+// Returns 0 if the input is empty or "0".
+func ParseDuration(s string) (time.Duration, error) {
+	if s == "" || s == "0" {
+		return 0, nil
+	}
+
+	matches := durationRegex.FindStringSubmatch(s)
+	if matches == nil {
+		return 0, fmt.Errorf("invalid duration format: %q (expected number, Xms, Xs, Xm, or Xh)", s)
+	}
+
+	value, err := strconv.ParseFloat(matches[1], 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid duration value: %q", matches[1])
+	}
+
+	unit := matches[2]
+	switch unit {
+	case "ms":
+		return time.Duration(value * float64(time.Millisecond)), nil
+	case "s", "":
+		// Default to seconds
+		return time.Duration(value * float64(time.Second)), nil
+	case "m":
+		return time.Duration(value * float64(time.Minute)), nil
+	case "h":
+		return time.Duration(value * float64(time.Hour)), nil
+	default:
+		return 0, fmt.Errorf("invalid duration unit: %q", unit)
+	}
+}
+
+// GetDuration returns a duration config value by parsing the string value.
+// Returns 0 if parsing fails or value is empty.
+func GetDuration(key string) time.Duration {
+	s := viper.GetString(key)
+	d, err := ParseDuration(s)
+	if err != nil {
+		return 0
+	}
+	return d
 }

@@ -76,6 +76,18 @@ watchr "ps aux"
 # Refresh every 2 seconds
 watchr -r 2 "docker ps"
 
+# Refresh every 500 milliseconds
+watchr -r 500ms "date"
+
+# Refresh every 1.5 seconds
+watchr -r 1.5s "kubectl get pods"
+
+# Refresh every 5 minutes
+watchr -r 5m "df -h"
+
+# Refresh every hour
+watchr -r 1h "curl -s https://api.example.com/status"
+
 # Watch file changes
 watchr -r 5 "find . -name '*.go' -mmin -1"
 ```
@@ -90,7 +102,7 @@ Options:
   -v, --version                    Show version
   -c, --config string              Load config from specified path
   -C, --show-config                Show loaded configuration and exit
-  -r, --refresh int                Auto-refresh interval in seconds (0 = disabled)
+  -r, --refresh string             Auto-refresh interval (e.g., 1, 1.5, 500ms, 2s, 5m, 1h; default unit: seconds, 0 = disabled)
   -p, --prompt string              Prompt string (default "watchr> ")
   -s, --shell string               Shell to use for executing commands (default "sh")
   -n, --no-line-numbers            Disable line numbers
@@ -124,7 +136,7 @@ preview-position: right
 line-numbers: true
 line-width: 4
 prompt: "> "
-refresh: 0
+refresh: 0           # disabled; or use: 2, 1.5, "500ms", "2s", "5m", "1h"
 interactive: false
 ```
 
@@ -136,7 +148,7 @@ preview-position = "right"
 line-numbers = true
 line-width = 4
 prompt = "> "
-refresh = 0
+refresh = 0          # disabled; or use: 2, 1.5, "500ms", "2s", "5m", "1h"
 interactive = false
 ```
 
@@ -153,6 +165,10 @@ interactive = false
   "interactive": false
 }
 ```
+
+The `refresh` option accepts:
+- Numbers: `2` or `1.5` (interpreted as seconds)
+- Explicit units: `"500ms"`, `"2s"`, `"5m"`, `"1h"`
 
 ### Priority Order
 

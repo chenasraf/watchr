@@ -33,7 +33,7 @@ type Config struct {
 	ShowLineNums         bool
 	LineNumWidth         int
 	Prompt               string
-	RefreshSeconds       int
+	RefreshInterval      time.Duration
 	Interactive          bool
 }
 
@@ -213,7 +213,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			// If auto-refresh is enabled, schedule the next run
-			if m.config.RefreshSeconds > 0 {
+			if m.config.RefreshInterval > 0 {
 				return m, m.tickCmd()
 			}
 			return m, nil
@@ -223,7 +223,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.streamTickCmd()
 
 	case tickMsg:
-		if m.config.RefreshSeconds > 0 && !m.streaming {
+		if m.config.RefreshInterval > 0 && !m.streaming {
 			// Restart streaming for refresh
 			cmd := m.startStreaming()
 			return m, tea.Batch(cmd, m.spinnerTickCmd())
@@ -252,7 +252,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) tickCmd() tea.Cmd {
-	return tea.Tick(time.Duration(m.config.RefreshSeconds)*time.Second, func(t time.Time) tea.Msg {
+	return tea.Tick(m.config.RefreshInterval, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }

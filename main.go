@@ -34,7 +34,7 @@ func main() {
 	flag.IntP("line-width", "w", 6, "Line number width")
 	flag.StringP("prompt", "p", "watchr> ", "Prompt string")
 	flag.StringP("shell", "s", "sh", "Shell to use for executing commands")
-	flag.IntP("refresh", "r", 0, "Auto-refresh interval in seconds (0 = disabled)")
+	flag.StringP("refresh", "r", "0", "Auto-refresh interval (e.g., 1, 1.5, 500ms, 2s, 5m, 1h; default unit: seconds, 0 = disabled)")
 	flag.BoolP("interactive", "i", false, "Run shell in interactive mode (sources ~/.bashrc, ~/.zshrc, etc.)")
 
 	printUsage := func(w *os.File) {
@@ -108,7 +108,7 @@ func main() {
 	shell := config.GetString(config.KeyShell)
 	lineNumWidth := config.GetInt(config.KeyLineWidth)
 	prompt := config.GetString(config.KeyPrompt)
-	refreshSeconds := config.GetInt(config.KeyRefresh)
+	refreshInterval := config.GetDuration(config.KeyRefresh)
 	showLineNums := config.ShowLineNumbers()
 	interactive := config.GetBool(config.KeyInteractive)
 
@@ -130,7 +130,7 @@ func main() {
 		ShowLineNums:         showLineNums,
 		LineNumWidth:         lineNumWidth,
 		Prompt:               prompt,
-		RefreshSeconds:       refreshSeconds,
+		RefreshInterval:      refreshInterval,
 		Interactive:          interactive,
 	}
 

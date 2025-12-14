@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -70,8 +71,8 @@ func TestInit(t *testing.T) {
 		t.Errorf("expected default prompt 'watchr> ', got %q", got)
 	}
 
-	if got := viper.GetInt(KeyRefresh); got != 0 {
-		t.Errorf("expected default refresh 0, got %d", got)
+	if got := viper.GetString(KeyRefresh); got != "0" {
+		t.Errorf("expected default refresh '0', got %q", got)
 	}
 }
 
@@ -131,7 +132,7 @@ func TestBindFlags(t *testing.T) {
 	flags.String("preview-position", "bottom", "")
 	flags.Int("line-width", 6, "")
 	flags.String("prompt", "watchr> ", "")
-	flags.Int("refresh", 0, "")
+	flags.String("refresh", "0", "")
 	flags.Bool("no-line-numbers", false, "")
 
 	// Parse with custom values
@@ -204,8 +205,8 @@ refresh: 5
 		t.Errorf("expected prompt 'test> ' from config file, got %q", got)
 	}
 
-	if got := GetInt(KeyRefresh); got != 5 {
-		t.Errorf("expected refresh 5 from config file, got %d", got)
+	if got := GetDuration(KeyRefresh); got != 5*time.Second {
+		t.Errorf("expected refresh 5s from config file, got %v", got)
 	}
 
 	// ConfigFileUsed should return the path
@@ -237,7 +238,7 @@ preview-size: "60%"
 	flags.String("preview-position", "bottom", "")
 	flags.Int("line-width", 6, "")
 	flags.String("prompt", "watchr> ", "")
-	flags.Int("refresh", 0, "")
+	flags.String("refresh", "0", "")
 	flags.Bool("no-line-numbers", false, "")
 
 	// Override shell via flag
@@ -322,8 +323,8 @@ refresh: 10
 		t.Errorf("expected prompt 'custom> ', got %q", got)
 	}
 
-	if got := GetInt(KeyRefresh); got != 10 {
-		t.Errorf("expected refresh 10, got %d", got)
+	if got := GetDuration(KeyRefresh); got != 10*time.Second {
+		t.Errorf("expected refresh 10s, got %v", got)
 	}
 
 	// ConfigFileUsed should return the specified path
@@ -432,5 +433,180 @@ func TestInitWithFileDefaults(t *testing.T) {
 
 	if got := GetInt(KeyLineWidth); got != 6 {
 		t.Errorf("expected default line-width 6, got %d", got)
+	}
+}
+
+func TestParseDuration(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected time.Duration
+		wantErr  bool
+	}{
+		// Empty and zero values
+		{"", 0, false},
+		{"0", 0, false},
+
+		// Plain numbers (default to seconds)
+		{"1", 1 * time.Second, false},
+		{"5", 5 * time.Second, false},
+		{"60", 60 * time.Second, false},
+
+		// Decimal seconds
+		{"0.5", 500 * time.Millisecond, false},
+		{"1.5", 1500 * time.Millisecond, false},
+		{"2.25", 2250 * time.Millisecond, false},
+		{"0.1", 100 * time.Millisecond, false},
+		{"0.001", 1 * time.Millisecond, false},
+
+		// Explicit seconds suffix
+		{"1s", 1 * time.Second, false},
+		{"5s", 5 * time.Second, false},
+		{"0.5s", 500 * time.Millisecond, false},
+		{"1.5s", 1500 * time.Millisecond, false},
+
+		// Milliseconds suffix
+		{"100ms", 100 * time.Millisecond, false},
+		{"500ms", 500 * time.Millisecond, false},
+		{"1000ms", 1000 * time.Millisecond, false},
+		{"1500ms", 1500 * time.Millisecond, false},
+		{"50.5ms", 50500 * time.Microsecond, false},
+
+		// Minutes suffix
+		{"1m", 1 * time.Minute, false},
+		{"5m", 5 * time.Minute, false},
+		{"0.5m", 30 * time.Second, false},
+		{"1.5m", 90 * time.Second, false},
+
+		// Hours suffix
+		{"1h", 1 * time.Hour, false},
+		{"2h", 2 * time.Hour, false},
+		{"0.5h", 30 * time.Minute, false},
+		{"1.5h", 90 * time.Minute, false},
+
+		// Invalid formats
+		{"abc", 0, true},
+		{"1d", 0, true},  // days not supported
+		{"1w", 0, true},  // weeks not supported
+		{"-1", 0, true},  // negative not supported
+		{"-1s", 0, true}, // negative not supported
+		{"1.2.3", 0, true},
+		{"s", 0, true},
+		{"ms", 0, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got, err := ParseDuration(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("ParseDuration(%q) expected error, got nil", tt.input)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("ParseDuration(%q) unexpected error: %v", tt.input, err)
+				return
+			}
+			if got != tt.expected {
+				t.Errorf("ParseDuration(%q) = %v, want %v", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetDuration(t *testing.T) {
+	_, cleanup := isolateConfig(t)
+	defer cleanup()
+
+	Init()
+
+	// Test default value
+	if got := GetDuration(KeyRefresh); got != 0 {
+		t.Errorf("expected default refresh 0, got %v", got)
+	}
+
+	// Test with seconds value
+	viper.Set(KeyRefresh, "5")
+	if got := GetDuration(KeyRefresh); got != 5*time.Second {
+		t.Errorf("expected refresh 5s, got %v", got)
+	}
+
+	// Test with decimal value
+	viper.Set(KeyRefresh, "0.5")
+	if got := GetDuration(KeyRefresh); got != 500*time.Millisecond {
+		t.Errorf("expected refresh 500ms, got %v", got)
+	}
+
+	// Test with explicit seconds suffix
+	viper.Set(KeyRefresh, "2s")
+	if got := GetDuration(KeyRefresh); got != 2*time.Second {
+		t.Errorf("expected refresh 2s, got %v", got)
+	}
+
+	// Test with milliseconds
+	viper.Set(KeyRefresh, "250ms")
+	if got := GetDuration(KeyRefresh); got != 250*time.Millisecond {
+		t.Errorf("expected refresh 250ms, got %v", got)
+	}
+
+	// Test with invalid value (should return 0)
+	viper.Set(KeyRefresh, "invalid")
+	if got := GetDuration(KeyRefresh); got != 0 {
+		t.Errorf("expected refresh 0 for invalid value, got %v", got)
+	}
+}
+
+func TestRefreshDurationFromConfigFile(t *testing.T) {
+	tmpDir, cleanup := isolateConfig(t)
+	defer cleanup()
+
+	tests := []struct {
+		name     string
+		yaml     string
+		expected time.Duration
+	}{
+		{
+			name:     "integer seconds",
+			yaml:     "refresh: 5\n",
+			expected: 5 * time.Second,
+		},
+		{
+			name:     "decimal seconds",
+			yaml:     "refresh: 0.5\n",
+			expected: 500 * time.Millisecond,
+		},
+		{
+			name:     "string with s suffix",
+			yaml:     "refresh: \"2s\"\n",
+			expected: 2 * time.Second,
+		},
+		{
+			name:     "string with ms suffix",
+			yaml:     "refresh: \"500ms\"\n",
+			expected: 500 * time.Millisecond,
+		},
+		{
+			name:     "string decimal with s suffix",
+			yaml:     "refresh: \"1.5s\"\n",
+			expected: 1500 * time.Millisecond,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resetViper()
+
+			configPath := filepath.Join(tmpDir, "watchr.yaml")
+			if err := os.WriteFile(configPath, []byte(tt.yaml), 0644); err != nil {
+				t.Fatalf("failed to write config file: %v", err)
+			}
+
+			Init()
+
+			got := GetDuration(KeyRefresh)
+			if got != tt.expected {
+				t.Errorf("GetDuration(KeyRefresh) = %v, want %v", got, tt.expected)
+			}
+		})
 	}
 }

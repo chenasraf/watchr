@@ -2,6 +2,7 @@ package ui
 
 import (
 	"testing"
+	"time"
 
 	"github.com/chenasraf/watchr/internal/runner"
 )
@@ -16,7 +17,7 @@ func TestConfig(t *testing.T) {
 		ShowLineNums:         true,
 		LineNumWidth:         6,
 		Prompt:               "watchr> ",
-		RefreshSeconds:       5,
+		RefreshInterval:      5 * time.Second,
 	}
 
 	if cfg.Command != "echo test" {
@@ -51,8 +52,8 @@ func TestConfig(t *testing.T) {
 		t.Errorf("expected prompt 'watchr> ', got %q", cfg.Prompt)
 	}
 
-	if cfg.RefreshSeconds != 5 {
-		t.Errorf("expected refresh seconds 5, got %d", cfg.RefreshSeconds)
+	if cfg.RefreshInterval != 5*time.Second {
+		t.Errorf("expected refresh interval 5s, got %v", cfg.RefreshInterval)
 	}
 }
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/chenasraf/watchr/compare/v1.5.0...v1.5.1) (2025-12-31)
+
+
+### Bug Fixes
+
+* esc button behavior ([5703a61](https://github.com/chenasraf/watchr/commit/5703a61ddb3ee25e58470c537d53bf4a463bc632))
+
 ## [1.5.0](https://github.com/chenasraf/watchr/compare/v1.4.0...v1.5.0) (2025-12-14)
 
 

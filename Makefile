@@ -48,7 +48,6 @@ precommit:
 		echo "Running pre-commit checks..."; \
 		echo "go fmt"; \
 		go fmt ./...; \
-		git add $$STAGED_FILES; \
 		echo "go vet"; \
 		go vet ./...; \
 		echo "golangci-lint"; \

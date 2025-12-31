@@ -295,7 +295,16 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Normal mode keybindings
 	switch msg.String() {
-	case "q", "esc", "ctrl+c":
+	case "q", "ctrl+c":
+		m.cancel()
+		return m, tea.Quit
+	case "esc":
+		// Clear filter if active, otherwise quit
+		if m.filter != "" {
+			m.filter = ""
+			m.updateFiltered()
+			return m, nil
+		}
 		m.cancel()
 		return m, tea.Quit
 

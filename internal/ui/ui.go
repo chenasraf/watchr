@@ -39,30 +39,31 @@ type Config struct {
 
 // model represents the application state
 type model struct {
-	config        Config
-	lines         []runner.Line
-	filtered      []int // indices into lines that match filter
-	cursor        int   // cursor position in filtered list
-	offset        int   // scroll offset for visible window
-	filter        string
-	filterMode    bool
-	showPreview   bool
-	showHelp      bool // help overlay visible
-	width         int
-	height        int
-	runner        *runner.Runner
-	ctx           context.Context
-	cancel        context.CancelFunc
-	loading       bool
-	streaming        bool                    // true while command is running (streaming output)
-	streamResult     *runner.StreamingResult // current streaming result
-	lastLineCount    int                     // track line count for updates
-	userScrolled     bool                    // true if user manually scrolled during streaming
-	refreshGeneration int                    // incremented on manual refresh to reset timer
-	spinnerFrame     int                     // current spinner animation frame
-	errorMsg      string
-	statusMsg     string // temporary status message (e.g., "Yanked!")
-	exitCode      int    // last command exit code
+	config            Config
+	lines             []runner.Line
+	filtered          []int // indices into lines that match filter
+	cursor            int   // cursor position in filtered list
+	offset            int   // scroll offset for visible window
+	filter            string
+	filterMode        bool
+	showPreview       bool
+	showHelp          bool // help overlay visible
+	width             int
+	height            int
+	runner            *runner.Runner
+	ctx               context.Context
+	cancel            context.CancelFunc
+	loading           bool
+	streaming         bool                    // true while command is running (streaming output)
+	streamResult      *runner.StreamingResult // current streaming result
+	lastLineCount     int                     // track line count for updates
+	userScrolled      bool                    // true if user manually scrolled during streaming
+	refreshGeneration int                     // incremented on manual refresh to reset timer
+	refreshStartTime  time.Time               // when the refresh timer was started
+	spinnerFrame      int                     // current spinner animation frame
+	errorMsg          string
+	statusMsg         string // temporary status message (e.g., "Yanked!")
+	exitCode          int    // last command exit code
 }
 
 // messages
@@ -76,8 +77,11 @@ type tickMsg struct {
 }
 type clearStatusMsg struct{}
 type spinnerTickMsg time.Time
-type streamTickMsg time.Time // periodic check for streaming updates
-type startStreamMsg struct{} // trigger to start streaming
+type streamTickMsg time.Time   // periodic check for streaming updates
+type startStreamMsg struct{}   // trigger to start streaming
+type countdownTickMsg struct { // periodic update for refresh countdown display
+	generation int
+}
 
 // Spinner frames for the loading animation
 var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
@@ -150,6 +154,13 @@ func (m model) spinnerTickCmd() tea.Cmd {
 func (m model) streamTickCmd() tea.Cmd {
 	return tea.Tick(50*time.Millisecond, func(t time.Time) tea.Msg {
 		return streamTickMsg(t)
+	})
+}
+
+func (m model) countdownTickCmd() tea.Cmd {
+	gen := m.refreshGeneration
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return countdownTickMsg{generation: gen}
 	})
 }
 
@@ -236,7 +247,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// If auto-refresh is enabled, schedule the next run
 			if m.config.RefreshInterval > 0 {
-				return m, m.tickCmd()
+				m.refreshStartTime = time.Now()
+				cmds := []tea.Cmd{m.tickCmd()}
+				// Start countdown display updates if interval > 1s
+				if m.config.RefreshInterval > time.Second {
+					cmds = append(cmds, m.countdownTickCmd())
+				}
+				return m, tea.Batch(cmds...)
 			}
 			return m, nil
 		}
@@ -270,6 +287,20 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.loading || m.streaming {
 			m.spinnerFrame = (m.spinnerFrame + 1) % len(spinnerFrames)
 			return m, m.spinnerTickCmd()
+		}
+		return m, nil
+
+	case countdownTickMsg:
+		// Ignore ticks from before a manual refresh
+		if msg.generation != m.refreshGeneration {
+			return m, nil
+		}
+		// Continue ticking if waiting for auto-refresh
+		if m.config.RefreshInterval > time.Second && !m.streaming && !m.refreshStartTime.IsZero() {
+			elapsed := time.Since(m.refreshStartTime)
+			if elapsed < m.config.RefreshInterval {
+				return m, m.countdownTickCmd()
+			}
 		}
 		return m, nil
 	}
@@ -889,6 +920,22 @@ func (m model) renderMainView() string {
 		// Failure - red cross with exit code and red command
 		failStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9")) // red
 		commandLine = prefix + failStyle.Render(fmt.Sprintf("✗ [%d] %s", m.exitCode, m.config.Command))
+	}
+
+	// Add refresh countdown on the right if auto-refresh is enabled and > 1s
+	if m.config.RefreshInterval > time.Second && !m.streaming && !m.refreshStartTime.IsZero() {
+		elapsed := time.Since(m.refreshStartTime)
+		remaining := m.config.RefreshInterval - elapsed
+		if remaining > 0 {
+			countdownStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241")) // dim gray
+			countdown := countdownStyle.Render(fmt.Sprintf("(%ds)", int(remaining.Seconds())+1))
+			cmdWidth := lipgloss.Width(commandLine)
+			countdownWidth := lipgloss.Width(countdown)
+			gap := innerWidth - cmdWidth - countdownWidth
+			if gap > 0 {
+				commandLine += strings.Repeat(" ", gap) + countdown
+			}
+		}
 	}
 
 	// Build prompt line (will go at bottom)

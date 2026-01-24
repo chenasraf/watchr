@@ -57,6 +57,7 @@ type model struct {
 	streaming     bool                    // true while command is running (streaming output)
 	streamResult  *runner.StreamingResult // current streaming result
 	lastLineCount int                     // track line count for updates
+	userScrolled  bool                    // true if user manually scrolled during streaming
 	spinnerFrame  int                     // current spinner animation frame
 	errorMsg      string
 	statusMsg     string // temporary status message (e.g., "Yanked!")
@@ -162,6 +163,7 @@ func (m *model) startStreaming() tea.Cmd {
 	m.lastLineCount = 0
 	m.exitCode = -1
 	m.errorMsg = ""
+	m.userScrolled = false
 
 	return m.streamTickCmd()
 }
@@ -201,6 +203,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.lines = newLines
 			m.lastLineCount = newCount
 			m.updateFiltered()
+
+			// Auto-scroll to bottom if user hasn't manually scrolled
+			if !m.userScrolled {
+				visible := m.visibleLines()
+				if visible > 0 {
+					m.cursor = max(len(m.filtered)-1, 0)
+					m.offset = max(len(m.filtered)-visible, 0)
+				}
+			}
 		}
 
 		// Check if command completed
@@ -309,24 +320,32 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case "j", "down", "ctrl+n":
+		m.userScrolled = true
 		m.moveCursor(1)
 	case "k", "up", "ctrl+p":
+		m.userScrolled = true
 		m.moveCursor(-1)
 	case "g", "home":
+		m.userScrolled = true
 		m.cursor = 0
 		m.offset = 0
 	case "G", "end":
+		m.userScrolled = false // Resume following output
 		if len(m.filtered) > 0 {
 			m.cursor = len(m.filtered) - 1
 			m.adjustOffset()
 		}
 	case "ctrl+d":
+		m.userScrolled = true
 		m.moveCursor(m.visibleLines() / 2)
 	case "ctrl+u":
+		m.userScrolled = true
 		m.moveCursor(-m.visibleLines() / 2)
 	case "pgdown", "ctrl+f":
+		m.userScrolled = true
 		m.moveCursor(m.visibleLines())
 	case "pgup", "ctrl+b":
+		m.userScrolled = true
 		m.moveCursor(-m.visibleLines())
 	case "p":
 		m.showPreview = !m.showPreview
@@ -494,7 +513,16 @@ func (m *model) updateFiltered() {
 	if m.cursor < 0 {
 		m.cursor = 0
 	}
-	m.offset = 0
+
+	// Clamp offset to valid bounds instead of resetting to 0
+	// This preserves scroll position during streaming updates
+	visible := m.visibleLines()
+	if visible > 0 {
+		maxOffset := max(len(m.filtered)-visible, 0)
+		if m.offset > maxOffset {
+			m.offset = maxOffset
+		}
+	}
 }
 
 // renderHelpOverlay creates the help box content (without positioning)

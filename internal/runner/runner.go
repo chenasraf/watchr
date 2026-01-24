@@ -12,6 +12,15 @@ import (
 	"sync"
 )
 
+// sanitizeLine removes control sequences that can corrupt terminal rendering
+func sanitizeLine(s string) string {
+	// Remove carriage returns
+	s = strings.ReplaceAll(s, "\r", "")
+	// Convert tabs to spaces (tabs cause width calculation issues)
+	s = strings.ReplaceAll(s, "\t", "        ")
+	return s
+}
+
 // Line represents a single line of output with its line number
 type Line struct {
 	Number  int
@@ -141,7 +150,7 @@ func (r *Runner) Run(ctx context.Context) (Result, error) {
 	for scanner.Scan() {
 		lines = append(lines, Line{
 			Number:  lineNum,
-			Content: scanner.Text(),
+			Content: sanitizeLine(scanner.Text()),
 		})
 		lineNum++
 	}
@@ -151,7 +160,7 @@ func (r *Runner) Run(ctx context.Context) (Result, error) {
 	for stderrScanner.Scan() {
 		lines = append(lines, Line{
 			Number:  lineNum,
-			Content: stderrScanner.Text(),
+			Content: sanitizeLine(stderrScanner.Text()),
 		})
 		lineNum++
 	}
@@ -265,7 +274,7 @@ func (r *Runner) RunStreaming(ctx context.Context) *StreamingResult {
 				result.mu.Lock()
 				*result.Lines = append(*result.Lines, Line{
 					Number:  currentLineNum,
-					Content: scanner.Text(),
+					Content: sanitizeLine(scanner.Text()),
 				})
 				result.mu.Unlock()
 			}

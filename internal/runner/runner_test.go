@@ -320,3 +320,61 @@ func TestSplitLines(t *testing.T) {
 		})
 	}
 }
+
+func TestSanitizeLine(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "plain text unchanged",
+			input: "hello world",
+			want:  "hello world",
+		},
+		{
+			name:  "tabs converted to spaces",
+			input: "col1\tcol2\tcol3",
+			want:  "col1        col2        col3",
+		},
+		{
+			name:  "carriage returns removed",
+			input: "line with\r\nwindows ending",
+			want:  "line with\nwindows ending",
+		},
+		{
+			name:  "carriage return only removed",
+			input: "progress\roverwrite",
+			want:  "progressoverwrite",
+		},
+		{
+			name:  "ANSI color codes preserved",
+			input: "\x1b[32mgreen text\x1b[0m",
+			want:  "\x1b[32mgreen text\x1b[0m",
+		},
+		{
+			name:  "mixed tabs and colors",
+			input: "\x1b[1m?\x1b[0m\tpackage\t[no test files]",
+			want:  "\x1b[1m?\x1b[0m        package        [no test files]",
+		},
+		{
+			name:  "empty string",
+			input: "",
+			want:  "",
+		},
+		{
+			name:  "multiple tabs",
+			input: "\t\t\t",
+			want:  "                        ",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := sanitizeLine(tt.input)
+			if got != tt.want {
+				t.Errorf("sanitizeLine(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}

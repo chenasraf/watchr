@@ -7,6 +7,8 @@ provides vim-style navigation, filtering, and a preview pane—all without leavi
 ![Downloads](https://img.shields.io/github/downloads/chenasraf/watchr/total)
 ![License](https://img.shields.io/github/license/chenasraf/watchr)
 
+![Promo](https://github.com/user-attachments/assets/ec5ab94b-ef91-40d8-a604-9047212a8faf)
+
 ---
 
 ## 🚀 Features

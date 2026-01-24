@@ -54,11 +54,12 @@ type model struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	loading       bool
-	streaming     bool                    // true while command is running (streaming output)
-	streamResult  *runner.StreamingResult // current streaming result
-	lastLineCount int                     // track line count for updates
-	userScrolled  bool                    // true if user manually scrolled during streaming
-	spinnerFrame  int                     // current spinner animation frame
+	streaming        bool                    // true while command is running (streaming output)
+	streamResult     *runner.StreamingResult // current streaming result
+	lastLineCount    int                     // track line count for updates
+	userScrolled     bool                    // true if user manually scrolled during streaming
+	refreshGeneration int                    // incremented on manual refresh to reset timer
+	spinnerFrame     int                     // current spinner animation frame
 	errorMsg      string
 	statusMsg     string // temporary status message (e.g., "Yanked!")
 	exitCode      int    // last command exit code
@@ -70,7 +71,9 @@ type resultMsg struct {
 	exitCode int
 }
 type errMsg struct{ err error }
-type tickMsg time.Time
+type tickMsg struct {
+	generation int
+}
 type clearStatusMsg struct{}
 type spinnerTickMsg time.Time
 type streamTickMsg time.Time // periodic check for streaming updates
@@ -242,6 +245,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.streamTickCmd()
 
 	case tickMsg:
+		// Ignore ticks from before a manual refresh
+		if msg.generation != m.refreshGeneration {
+			return m, nil
+		}
 		if m.config.RefreshInterval > 0 && !m.streaming {
 			// Restart streaming for refresh
 			cmd := m.startStreaming()
@@ -271,8 +278,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) tickCmd() tea.Cmd {
+	gen := m.refreshGeneration
 	return tea.Tick(m.config.RefreshInterval, func(t time.Time) tea.Msg {
-		return tickMsg(t)
+		return tickMsg{generation: gen}
 	})
 }
 
@@ -359,7 +367,8 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.showPreview = !m.showPreview
 		m.adjustOffset() // Keep selected line visible after preview toggle
 	case "r", "ctrl+r":
-		// Restart streaming
+		// Restart streaming and reset auto-refresh timer
+		m.refreshGeneration++
 		cmd := m.startStreaming()
 		return m, tea.Batch(cmd, m.spinnerTickCmd())
 	case "/":

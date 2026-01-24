@@ -34,6 +34,7 @@ type Config struct {
 	LineNumWidth         int
 	Prompt               string
 	RefreshInterval      time.Duration
+	RefreshFromStart     bool // If true, refresh timer starts when command starts; if false, when command ends (default)
 	Interactive          bool
 }
 
@@ -180,7 +181,18 @@ func (m *model) startStreaming() tea.Cmd {
 	m.errorMsg = ""
 	m.userScrolled = false
 
-	return m.streamTickCmd()
+	cmds := []tea.Cmd{m.streamTickCmd()}
+
+	// Start refresh timer from command start if configured
+	if m.config.RefreshFromStart && m.config.RefreshInterval > 0 {
+		m.refreshStartTime = time.Now()
+		cmds = append(cmds, m.tickCmd())
+		if m.config.RefreshInterval > time.Second {
+			cmds = append(cmds, m.countdownTickCmd())
+		}
+	}
+
+	return tea.Batch(cmds...)
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -245,8 +257,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.updateFiltered()
 			}
 
-			// If auto-refresh is enabled, schedule the next run
-			if m.config.RefreshInterval > 0 {
+			// If auto-refresh is enabled and timer starts from end, schedule the next run
+			if m.config.RefreshInterval > 0 && !m.config.RefreshFromStart {
 				m.refreshStartTime = time.Now()
 				cmds := []tea.Cmd{m.tickCmd()}
 				// Start countdown display updates if interval > 1s

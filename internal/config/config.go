@@ -15,14 +15,15 @@ import (
 
 // Config keys
 const (
-	KeyShell           = "shell"
-	KeyPreviewSize     = "preview-size"
-	KeyPreviewPosition = "preview-position"
-	KeyLineNumbers     = "line-numbers"
-	KeyLineWidth       = "line-width"
-	KeyPrompt          = "prompt"
-	KeyRefresh         = "refresh"
-	KeyInteractive     = "interactive"
+	KeyShell            = "shell"
+	KeyPreviewSize      = "preview-size"
+	KeyPreviewPosition  = "preview-position"
+	KeyLineNumbers      = "line-numbers"
+	KeyLineWidth        = "line-width"
+	KeyPrompt           = "prompt"
+	KeyRefresh          = "refresh"
+	KeyRefreshFromStart = "refresh-from-start"
+	KeyInteractive      = "interactive"
 )
 
 // setDefaults sets the default configuration values.
@@ -34,6 +35,7 @@ func setDefaults() {
 	viper.SetDefault(KeyLineWidth, 6)
 	viper.SetDefault(KeyPrompt, "watchr> ")
 	viper.SetDefault(KeyRefresh, "0")
+	viper.SetDefault(KeyRefreshFromStart, false)
 	viper.SetDefault(KeyInteractive, false)
 }
 
@@ -79,6 +81,7 @@ func BindFlags(flags *pflag.FlagSet) {
 	_ = viper.BindPFlag(KeyLineWidth, flags.Lookup("line-width"))
 	_ = viper.BindPFlag(KeyPrompt, flags.Lookup("prompt"))
 	_ = viper.BindPFlag(KeyRefresh, flags.Lookup("refresh"))
+	_ = viper.BindPFlag(KeyRefreshFromStart, flags.Lookup("refresh-from-start"))
 	_ = viper.BindPFlag(KeyInteractive, flags.Lookup("interactive"))
 
 	// line-numbers is inverted (no-line-numbers flag)
@@ -133,6 +136,7 @@ func PrintConfig() {
 	fmt.Printf("  %-20s %d\n", KeyLineWidth+":", GetInt(KeyLineWidth))
 	fmt.Printf("  %-20s %q\n", KeyPrompt+":", GetString(KeyPrompt))
 	fmt.Printf("  %-20s %s\n", KeyRefresh+":", GetString(KeyRefresh))
+	fmt.Printf("  %-20s %v\n", KeyRefreshFromStart+":", GetBool(KeyRefreshFromStart))
 	fmt.Printf("  %-20s %v\n", KeyInteractive+":", GetBool(KeyInteractive))
 }
 

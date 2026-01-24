@@ -157,10 +157,11 @@ func (m *model) startStreaming() tea.Cmd {
 	}
 	m.ctx, m.cancel = context.WithCancel(context.Background())
 
-	m.streamResult = m.runner.RunStreaming(m.ctx)
+	// Pass previous lines for in-place updates
+	m.streamResult = m.runner.RunStreaming(m.ctx, m.lines)
 	m.streaming = true
 	m.loading = true
-	m.lastLineCount = 0
+	m.lastLineCount = len(m.lines)
 	m.exitCode = -1
 	m.errorMsg = ""
 	m.userScrolled = false
@@ -221,6 +222,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.exitCode = m.streamResult.ExitCode
 			if m.streamResult.Error != nil {
 				m.errorMsg = m.streamResult.Error.Error()
+			}
+
+			// Trim excess lines from previous run
+			currentCount := m.streamResult.GetCurrentLineCount()
+			if currentCount < len(m.lines) {
+				m.lines = m.lines[:currentCount]
+				m.updateFiltered()
 			}
 
 			// If auto-refresh is enabled, schedule the next run

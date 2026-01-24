@@ -178,11 +178,13 @@ func (r *Runner) Run(ctx context.Context) (Result, error) {
 
 // StreamingResult holds the state of a streaming command
 type StreamingResult struct {
-	Lines    *[]Line
-	ExitCode int
-	Done     bool
-	Error    error
-	mu       sync.RWMutex
+	Lines            *[]Line
+	ExitCode         int
+	Done             bool
+	Error            error
+	PrevLineCount    int // Number of lines from previous run (for trimming)
+	CurrentLineCount int // Number of lines written by current run
+	mu               sync.RWMutex
 }
 
 // GetLines returns a copy of the current lines (thread-safe)
@@ -214,14 +216,27 @@ func (s *StreamingResult) IsDone() bool {
 	return s.Done
 }
 
+// GetCurrentLineCount returns the number of lines written by the current run (thread-safe)
+func (s *StreamingResult) GetCurrentLineCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.CurrentLineCount
+}
+
 // RunStreaming executes the command and streams output lines in the background.
 // Returns a StreamingResult that can be polled for updates.
 // The command runs until ctx is cancelled or it completes naturally.
-func (r *Runner) RunStreaming(ctx context.Context) *StreamingResult {
+// If prevLines is provided, lines are updated in place rather than starting fresh.
+func (r *Runner) RunStreaming(ctx context.Context, prevLines []Line) *StreamingResult {
+	// Copy previous lines to allow in-place updates
+	lines := make([]Line, len(prevLines))
+	copy(lines, prevLines)
+
 	result := &StreamingResult{
-		Lines:    &[]Line{},
-		ExitCode: -1,
-		Done:     false,
+		Lines:         &lines,
+		ExitCode:      -1,
+		Done:          false,
+		PrevLineCount: len(prevLines),
 	}
 
 	go func() {
@@ -268,14 +283,27 @@ func (r *Runner) RunStreaming(ctx context.Context) *StreamingResult {
 			for scanner.Scan() {
 				lineNumMu.Lock()
 				currentLineNum := lineNum
+				lineIdx := lineNum - 1 // 0-indexed
 				lineNum++
 				lineNumMu.Unlock()
 
-				result.mu.Lock()
-				*result.Lines = append(*result.Lines, Line{
+				newLine := Line{
 					Number:  currentLineNum,
 					Content: sanitizeLine(scanner.Text()),
-				})
+				}
+
+				result.mu.Lock()
+				if lineIdx < len(*result.Lines) {
+					// Update existing line in place
+					(*result.Lines)[lineIdx] = newLine
+				} else {
+					// Append new line
+					*result.Lines = append(*result.Lines, newLine)
+				}
+				// Track how many lines this run has produced
+				if currentLineNum > result.CurrentLineCount {
+					result.CurrentLineCount = currentLineNum
+				}
 				result.mu.Unlock()
 			}
 		}

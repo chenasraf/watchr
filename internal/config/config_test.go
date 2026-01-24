@@ -133,7 +133,9 @@ func TestBindFlags(t *testing.T) {
 	flags.Int("line-width", 6, "")
 	flags.String("prompt", "watchr> ", "")
 	flags.String("refresh", "0", "")
+	flags.Bool("refresh-from-start", false, "")
 	flags.Bool("no-line-numbers", false, "")
+	flags.Bool("interactive", false, "")
 
 	// Parse with custom values
 	err := flags.Parse([]string{"--shell=bash", "--preview-size=50%", "--line-width=8"})
@@ -239,7 +241,9 @@ preview-size: "60%"
 	flags.Int("line-width", 6, "")
 	flags.String("prompt", "watchr> ", "")
 	flags.String("refresh", "0", "")
+	flags.Bool("refresh-from-start", false, "")
 	flags.Bool("no-line-numbers", false, "")
+	flags.Bool("interactive", false, "")
 
 	// Override shell via flag
 	err := flags.Parse([]string{"--shell=bash"})
@@ -553,6 +557,107 @@ func TestGetDuration(t *testing.T) {
 	viper.Set(KeyRefresh, "invalid")
 	if got := GetDuration(KeyRefresh); got != 0 {
 		t.Errorf("expected refresh 0 for invalid value, got %v", got)
+	}
+}
+
+func TestRefreshFromStartDefault(t *testing.T) {
+	_, cleanup := isolateConfig(t)
+	defer cleanup()
+
+	Init()
+
+	// Default should be false
+	if got := GetBool(KeyRefreshFromStart); got != false {
+		t.Errorf("expected default refresh-from-start false, got %v", got)
+	}
+}
+
+func TestRefreshFromStartFromConfigFile(t *testing.T) {
+	tmpDir, cleanup := isolateConfig(t)
+	defer cleanup()
+
+	// Create config file with refresh-from-start: true
+	configPath := filepath.Join(tmpDir, "watchr.yaml")
+	configContent := `refresh-from-start: true
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	Init()
+
+	if got := GetBool(KeyRefreshFromStart); got != true {
+		t.Errorf("expected refresh-from-start true from config file, got %v", got)
+	}
+}
+
+func TestRefreshFromStartFromFlag(t *testing.T) {
+	_, cleanup := isolateConfig(t)
+	defer cleanup()
+
+	Init()
+
+	// Create flags and parse
+	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	flags.String("shell", "sh", "")
+	flags.String("preview-size", "40%", "")
+	flags.String("preview-position", "bottom", "")
+	flags.Int("line-width", 6, "")
+	flags.String("prompt", "watchr> ", "")
+	flags.String("refresh", "0", "")
+	flags.Bool("refresh-from-start", false, "")
+	flags.Bool("no-line-numbers", false, "")
+	flags.Bool("interactive", false, "")
+
+	// Parse with refresh-from-start=true
+	err := flags.Parse([]string{"--refresh-from-start=true"})
+	if err != nil {
+		t.Fatalf("failed to parse flags: %v", err)
+	}
+
+	BindFlags(flags)
+
+	if got := GetBool(KeyRefreshFromStart); got != true {
+		t.Errorf("expected refresh-from-start true from flag, got %v", got)
+	}
+}
+
+func TestRefreshFromStartFlagOverridesConfig(t *testing.T) {
+	tmpDir, cleanup := isolateConfig(t)
+	defer cleanup()
+
+	// Create config file with refresh-from-start: true
+	configPath := filepath.Join(tmpDir, "watchr.yaml")
+	configContent := `refresh-from-start: true
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	Init()
+
+	// Create flags and parse with refresh-from-start=false
+	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	flags.String("shell", "sh", "")
+	flags.String("preview-size", "40%", "")
+	flags.String("preview-position", "bottom", "")
+	flags.Int("line-width", 6, "")
+	flags.String("prompt", "watchr> ", "")
+	flags.String("refresh", "0", "")
+	flags.Bool("refresh-from-start", false, "")
+	flags.Bool("no-line-numbers", false, "")
+	flags.Bool("interactive", false, "")
+
+	err := flags.Parse([]string{"--refresh-from-start=false"})
+	if err != nil {
+		t.Fatalf("failed to parse flags: %v", err)
+	}
+
+	BindFlags(flags)
+
+	// Flag should override config
+	if got := GetBool(KeyRefreshFromStart); got != false {
+		t.Errorf("expected refresh-from-start false (flag override), got %v", got)
 	}
 }
 

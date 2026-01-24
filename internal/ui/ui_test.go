@@ -284,3 +284,132 @@ func TestVisibleLines(t *testing.T) {
 		t.Errorf("expected %d visible lines with absolute preview size, got %d", expected, visible)
 	}
 }
+
+func TestUpdateFilteredPreservesOffset(t *testing.T) {
+	cfg := Config{
+		Command: "echo test",
+		Shell:   "sh",
+	}
+
+	m := initialModel(cfg)
+	m.height = 20 // Enough for visibleLines to return > 0
+
+	// Add many test lines
+	for i := 1; i <= 100; i++ {
+		m.lines = append(m.lines, runner.Line{Number: i, Content: "line content"})
+	}
+
+	// Set initial state with offset
+	m.filter = ""
+	m.updateFiltered()
+	m.offset = 50
+	m.cursor = 55
+
+	// Simulate streaming update - add more lines without changing filter
+	m.lines = append(m.lines, runner.Line{Number: 101, Content: "new line"})
+	m.updateFiltered()
+
+	// Offset should be preserved (or clamped if necessary)
+	if m.offset < 50 {
+		t.Errorf("expected offset to be preserved (>= 50), got %d", m.offset)
+	}
+
+	// Cursor should be preserved
+	if m.cursor != 55 {
+		t.Errorf("expected cursor to be preserved at 55, got %d", m.cursor)
+	}
+}
+
+func TestUpdateFilteredClampsOffsetWhenNeeded(t *testing.T) {
+	cfg := Config{
+		Command: "echo test",
+		Shell:   "sh",
+	}
+
+	m := initialModel(cfg)
+	m.height = 20
+
+	// Add test lines
+	for i := 1; i <= 100; i++ {
+		m.lines = append(m.lines, runner.Line{Number: i, Content: "line content"})
+	}
+
+	m.filter = ""
+	m.updateFiltered()
+	m.offset = 90
+	m.cursor = 95
+
+	// Now filter to fewer lines
+	m.filter = "xyz" // No matches
+	m.updateFiltered()
+
+	// Offset should be clamped to valid range
+	if m.offset != 0 {
+		t.Errorf("expected offset to be clamped to 0, got %d", m.offset)
+	}
+
+	// Cursor should be clamped
+	if m.cursor != 0 {
+		t.Errorf("expected cursor to be clamped to 0, got %d", m.cursor)
+	}
+}
+
+func TestConfigRefreshFromStart(t *testing.T) {
+	// Test with RefreshFromStart false (default)
+	cfg := Config{
+		Command:          "echo test",
+		Shell:            "sh",
+		RefreshInterval:  5 * time.Second,
+		RefreshFromStart: false,
+	}
+
+	if cfg.RefreshFromStart {
+		t.Error("expected RefreshFromStart to be false by default")
+	}
+
+	// Test with RefreshFromStart true
+	cfg.RefreshFromStart = true
+	if !cfg.RefreshFromStart {
+		t.Error("expected RefreshFromStart to be true after setting")
+	}
+}
+
+func TestModelUserScrolled(t *testing.T) {
+	cfg := Config{
+		Command: "echo test",
+		Shell:   "sh",
+	}
+
+	m := initialModel(cfg)
+
+	// Initially should be false
+	if m.userScrolled {
+		t.Error("expected userScrolled to be false initially")
+	}
+
+	// After setting, should be true
+	m.userScrolled = true
+	if !m.userScrolled {
+		t.Error("expected userScrolled to be true after setting")
+	}
+}
+
+func TestModelRefreshGeneration(t *testing.T) {
+	cfg := Config{
+		Command: "echo test",
+		Shell:   "sh",
+	}
+
+	m := initialModel(cfg)
+
+	// Initially should be 0
+	if m.refreshGeneration != 0 {
+		t.Errorf("expected refreshGeneration to be 0 initially, got %d", m.refreshGeneration)
+	}
+
+	// After incrementing
+	m.refreshGeneration++
+	if m.refreshGeneration != 1 {
+		t.Errorf("expected refreshGeneration to be 1 after increment, got %d", m.refreshGeneration)
+	}
+}

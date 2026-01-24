@@ -378,3 +378,147 @@ func TestSanitizeLine(t *testing.T) {
 		})
 	}
 }
+
+func TestRunStreaming(t *testing.T) {
+	r := NewRunner("sh", "echo 'line1'; echo 'line2'; echo 'line3'")
+	ctx := context.Background()
+
+	result := r.RunStreaming(ctx, nil)
+
+	// Wait for completion
+	for !result.IsDone() {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	lines := result.GetLines()
+	if len(lines) != 3 {
+		t.Fatalf("expected 3 lines, got %d", len(lines))
+	}
+
+	if lines[0].Content != "line1" {
+		t.Errorf("expected first line 'line1', got %q", lines[0].Content)
+	}
+
+	if result.GetCurrentLineCount() != 3 {
+		t.Errorf("expected CurrentLineCount 3, got %d", result.GetCurrentLineCount())
+	}
+}
+
+func TestRunStreamingWithPreviousLines(t *testing.T) {
+	// Previous lines that should be overwritten
+	prevLines := []Line{
+		{Number: 1, Content: "old1"},
+		{Number: 2, Content: "old2"},
+		{Number: 3, Content: "old3"},
+		{Number: 4, Content: "old4"},
+		{Number: 5, Content: "old5"},
+	}
+
+	r := NewRunner("sh", "echo 'new1'; echo 'new2'; echo 'new3'")
+	ctx := context.Background()
+
+	result := r.RunStreaming(ctx, prevLines)
+
+	// Verify PrevLineCount is set
+	if result.PrevLineCount != 5 {
+		t.Errorf("expected PrevLineCount 5, got %d", result.PrevLineCount)
+	}
+
+	// Wait for completion
+	for !result.IsDone() {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	lines := result.GetLines()
+
+	// Should still have 5 lines (3 new + 2 old remaining)
+	if len(lines) != 5 {
+		t.Fatalf("expected 5 lines (in-place update), got %d", len(lines))
+	}
+
+	// First 3 lines should be overwritten
+	if lines[0].Content != "new1" {
+		t.Errorf("expected line 0 'new1', got %q", lines[0].Content)
+	}
+	if lines[1].Content != "new2" {
+		t.Errorf("expected line 1 'new2', got %q", lines[1].Content)
+	}
+	if lines[2].Content != "new3" {
+		t.Errorf("expected line 2 'new3', got %q", lines[2].Content)
+	}
+
+	// Remaining lines should be old (not touched)
+	if lines[3].Content != "old4" {
+		t.Errorf("expected line 3 'old4', got %q", lines[3].Content)
+	}
+	if lines[4].Content != "old5" {
+		t.Errorf("expected line 4 'old5', got %q", lines[4].Content)
+	}
+
+	// CurrentLineCount should be 3 (only new lines written)
+	if result.GetCurrentLineCount() != 3 {
+		t.Errorf("expected CurrentLineCount 3, got %d", result.GetCurrentLineCount())
+	}
+}
+
+func TestRunStreamingMoreLinesThanPrevious(t *testing.T) {
+	// Previous lines (fewer than new output)
+	prevLines := []Line{
+		{Number: 1, Content: "old1"},
+		{Number: 2, Content: "old2"},
+	}
+
+	r := NewRunner("sh", "echo 'new1'; echo 'new2'; echo 'new3'; echo 'new4'")
+	ctx := context.Background()
+
+	result := r.RunStreaming(ctx, prevLines)
+
+	// Wait for completion
+	for !result.IsDone() {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	lines := result.GetLines()
+
+	// Should have 4 lines (2 overwritten + 2 appended)
+	if len(lines) != 4 {
+		t.Fatalf("expected 4 lines, got %d", len(lines))
+	}
+
+	// All lines should be new
+	for i, expected := range []string{"new1", "new2", "new3", "new4"} {
+		if lines[i].Content != expected {
+			t.Errorf("expected line %d %q, got %q", i, expected, lines[i].Content)
+		}
+	}
+
+	if result.GetCurrentLineCount() != 4 {
+		t.Errorf("expected CurrentLineCount 4, got %d", result.GetCurrentLineCount())
+	}
+}
+
+func TestStreamingResultThreadSafety(t *testing.T) {
+	r := NewRunner("sh", "for i in $(seq 1 100); do echo line$i; done")
+	ctx := context.Background()
+
+	result := r.RunStreaming(ctx, nil)
+
+	// Concurrently read while streaming
+	done := make(chan bool)
+	go func() {
+		for !result.IsDone() {
+			_ = result.GetLines()
+			_ = result.LineCount()
+			_ = result.GetCurrentLineCount()
+			time.Sleep(5 * time.Millisecond)
+		}
+		done <- true
+	}()
+
+	<-done
+
+	// Should complete without race conditions
+	if result.LineCount() != 100 {
+		t.Errorf("expected 100 lines, got %d", result.LineCount())
+	}
+}

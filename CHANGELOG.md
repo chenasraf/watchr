@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.6.0](https://github.com/chenasraf/watchr/compare/v1.5.2...v1.6.0) (2026-01-24)
+
+
+### Features
+
+* add refresh countdown timer ([63b4530](https://github.com/chenasraf/watchr/commit/63b45309b76def1b5be9c11d5228d97bb7ab0a6d))
+* add refresh-from-start setting ([f520a8b](https://github.com/chenasraf/watchr/commit/f520a8b4ed665c3187bab88707df9e5efdc779bc))
+* reset refresh timer after manual refresh ([10a9208](https://github.com/chenasraf/watchr/commit/10a92082b6c11fcfba2bd835ed2336d1f33d1c04))
+* stream new output in-place without resetting existing output ([8aaf514](https://github.com/chenasraf/watchr/commit/8aaf5148ab17b33a72ff3f946c57029c33bdb4d0))
+
+
+### Bug Fixes
+
+* streaming cursor position ([347ac34](https://github.com/chenasraf/watchr/commit/347ac340942c3ee8d2731432f808ac2b9dd39060))
+
 ## [1.5.2](https://github.com/chenasraf/watchr/compare/v1.5.1...v1.5.2) (2026-01-24)
 
 

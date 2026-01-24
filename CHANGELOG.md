@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.2](https://github.com/chenasraf/watchr/compare/v1.5.1...v1.5.2) (2026-01-24)
+
+
+### Bug Fixes
+
+* tab characters breaking the layout ([c09d3e4](https://github.com/chenasraf/watchr/commit/c09d3e41ddd69c44ea0546cb0608abe8b0c50334))
+
 ## [1.5.1](https://github.com/chenasraf/watchr/compare/v1.5.0...v1.5.1) (2025-12-31)
 
 

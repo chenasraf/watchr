@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/chenasraf/watchr/compare/v1.6.0...v1.7.0) (2026-01-26)
+
+
+### Features
+
+* add keybinding 'c' to stop running command ([9df4fb8](https://github.com/chenasraf/watchr/commit/9df4fb8285a0181d29cfc6034165ce7cb21ab14b))
+
 ## [1.6.0](https://github.com/chenasraf/watchr/compare/v1.5.2...v1.6.0) (2026-01-24)
 
 

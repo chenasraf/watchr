@@ -1,9 +1,11 @@
 package ui
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/chenasraf/watchr/internal/runner"
 )
 
@@ -412,4 +414,76 @@ func TestModelRefreshGeneration(t *testing.T) {
 	if m.refreshGeneration != 1 {
 		t.Errorf("expected refreshGeneration to be 1 after increment, got %d", m.refreshGeneration)
 	}
+}
+
+func TestStopCommandKeybinding(t *testing.T) {
+	cfg := Config{
+		Command: "echo test",
+		Shell:   "sh",
+	}
+
+	t.Run("stops running command when streaming", func(t *testing.T) {
+		m := initialModel(cfg)
+		// Set up a cancellable context to track if cancel was called
+		ctx, cancel := context.WithCancel(context.Background())
+		m.ctx = ctx
+		m.cancel = cancel
+		m.streaming = true
+		m.statusMsg = ""
+
+		// Simulate pressing 'c'
+		keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
+		result, cmd := m.handleKeyPress(keyMsg)
+		newModel := result.(*model)
+
+		// Should set status message
+		if newModel.statusMsg != "Command stopped" {
+			t.Errorf("expected statusMsg 'Command stopped', got %q", newModel.statusMsg)
+		}
+
+		// Should return a command (the tick for clearing status)
+		if cmd == nil {
+			t.Error("expected a command to be returned for status message timeout")
+		}
+
+		// Context should be cancelled
+		select {
+		case <-ctx.Done():
+			// Good, context was cancelled
+		default:
+			t.Error("expected context to be cancelled")
+		}
+	})
+
+	t.Run("does nothing when not streaming", func(t *testing.T) {
+		m := initialModel(cfg)
+		ctx, cancel := context.WithCancel(context.Background())
+		m.ctx = ctx
+		m.cancel = cancel
+		m.streaming = false
+		m.statusMsg = ""
+
+		// Simulate pressing 'c'
+		keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
+		result, cmd := m.handleKeyPress(keyMsg)
+		newModel := result.(*model)
+
+		// Should not set status message
+		if newModel.statusMsg != "" {
+			t.Errorf("expected empty statusMsg, got %q", newModel.statusMsg)
+		}
+
+		// Should not return a command
+		if cmd != nil {
+			t.Error("expected no command to be returned when not streaming")
+		}
+
+		// Context should NOT be cancelled
+		select {
+		case <-ctx.Done():
+			t.Error("expected context to NOT be cancelled when not streaming")
+		default:
+			// Good, context is still active
+		}
+	})
 }

@@ -414,6 +414,15 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.refreshGeneration++
 		cmd := m.startStreaming()
 		return m, tea.Batch(cmd, m.spinnerTickCmd())
+	case "c":
+		// Stop the running command if one is running
+		if m.streaming {
+			m.cancel()
+			m.statusMsg = "Command stopped"
+			return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
+				return clearStatusMsg{}
+			})
+		}
 	case "/":
 		m.filterMode = true
 		m.filter = ""
@@ -614,6 +623,7 @@ func (m model) renderHelpOverlay() (box string, boxWidth, boxHeight int) {
 		{"Esc", "Exit filter / clear"},
 		{"", ""},
 		{"r / Ctrl+r", "Reload command"},
+		{"c", "Stop running command"},
 		{"y", "Copy line to clipboard"},
 		{"q / Esc", "Quit"},
 		{"?", "Toggle this help"},

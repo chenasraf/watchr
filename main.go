@@ -47,6 +47,7 @@ func main() {
 		flag.CommandLine.SetOutput(os.Stderr)
 		_, _ = fmt.Fprintf(w, "\nKeybindings:\n")
 		_, _ = fmt.Fprintf(w, "  r, Ctrl-r      Reload (re-run command)\n")
+		_, _ = fmt.Fprintf(w, "  c              Stop running command\n")
 		_, _ = fmt.Fprintf(w, "  q, Esc         Quit\n")
 		_, _ = fmt.Fprintf(w, "  j, k           Move down/up\n")
 		_, _ = fmt.Fprintf(w, "  g              Go to first line\n")

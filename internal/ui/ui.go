@@ -52,7 +52,7 @@ type model struct {
 	filterRegex       bool  // true when filter is in regex mode
 	filterRegexErr    error // non-nil when regex pattern is invalid
 	showPreview       bool
-	previewOffset     int // scroll offset for preview pane
+	previewOffset     int  // scroll offset for preview pane
 	showHelp          bool // help overlay visible
 	width             int
 	height            int
@@ -70,6 +70,11 @@ type model struct {
 	errorMsg          string
 	statusMsg         string // temporary status message (e.g., "Yanked!")
 	exitCode          int    // last command exit code
+
+	cmdPaletteMode     bool   // whether command palette is open
+	cmdPaletteFilter   string // current filter text
+	cmdPaletteCursor   int    // cursor position within filter string
+	cmdPaletteSelected int    // selected item index in filtered list
 }
 
 // messages
@@ -93,6 +98,122 @@ type countdownTickMsg struct { // periodic update for refresh countdown display
 var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
 func (e errMsg) Error() string { return e.err.Error() }
+
+// command represents a command palette entry
+type command struct {
+	name     string // display name
+	shortcut string // keybinding hint
+	action   func(m *model) (tea.Model, tea.Cmd)
+}
+
+// commands returns the list of available command palette entries.
+func commands() []command {
+	return []command{
+		{"Reload command", "r / Ctrl+r", func(m *model) (tea.Model, tea.Cmd) {
+			m.refreshGeneration++
+			cmd := m.startStreaming()
+			return m, tea.Batch(cmd, m.spinnerTickCmd())
+		}},
+		{"Stop running command", "c", func(m *model) (tea.Model, tea.Cmd) {
+			if m.streaming {
+				m.cancel()
+				m.statusMsg = "Command stopped"
+				return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg { return clearStatusMsg{} })
+			}
+			return m, nil
+		}},
+		{"Toggle preview pane", "p", func(m *model) (tea.Model, tea.Cmd) {
+			m.showPreview = !m.showPreview
+			m.adjustOffset()
+			return m, nil
+		}},
+		{"Increase preview size", "+", func(m *model) (tea.Model, tea.Cmd) {
+			if m.showPreview {
+				m.config.PreviewSize += previewSizeStep(m.config.PreviewSizeIsPercent)
+				m.adjustOffset()
+			}
+			return m, nil
+		}},
+		{"Decrease preview size", "-", func(m *model) (tea.Model, tea.Cmd) {
+			if m.showPreview {
+				step := previewSizeStep(m.config.PreviewSizeIsPercent)
+				if m.config.PreviewSize > step {
+					m.config.PreviewSize -= step
+					m.adjustOffset()
+				}
+			}
+			return m, nil
+		}},
+		{"Go to first line", "g", func(m *model) (tea.Model, tea.Cmd) {
+			m.userScrolled = true
+			m.previewOffset = 0
+			m.cursor = 0
+			m.offset = 0
+			return m, nil
+		}},
+		{"Go to last line", "G", func(m *model) (tea.Model, tea.Cmd) {
+			m.userScrolled = false
+			m.previewOffset = 0
+			if len(m.filtered) > 0 {
+				m.cursor = len(m.filtered) - 1
+				m.adjustOffset()
+			}
+			return m, nil
+		}},
+		{"Enter filter mode", "/", func(m *model) (tea.Model, tea.Cmd) {
+			m.filterMode = true
+			m.filterCursor = len(m.filter)
+			return m, nil
+		}},
+		{"Toggle regex filter", "//", func(m *model) (tea.Model, tea.Cmd) {
+			m.filterMode = true
+			m.filterRegex = !m.filterRegex
+			m.filterRegexErr = nil
+			m.filterCursor = len(m.filter)
+			m.updateFiltered()
+			return m, nil
+		}},
+		{"Copy line to clipboard", "y", func(m *model) (tea.Model, tea.Cmd) {
+			if len(m.filtered) > 0 && m.cursor >= 0 && m.cursor < len(m.filtered) {
+				idx := m.filtered[m.cursor]
+				if idx < len(m.lines) {
+					content := m.lines[idx].Content
+					if err := copyToClipboard(content); err != nil {
+						m.statusMsg = "Failed to copy"
+					} else {
+						m.statusMsg = "Copied to clipboard"
+					}
+					return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg { return clearStatusMsg{} })
+				}
+			}
+			return m, nil
+		}},
+		{"Show help", "?", func(m *model) (tea.Model, tea.Cmd) {
+			m.showHelp = true
+			return m, nil
+		}},
+		{"Quit", "q", func(m *model) (tea.Model, tea.Cmd) {
+			m.cancel()
+			return m, tea.Quit
+		}},
+	}
+}
+
+// filteredCommands returns commands matching the current palette filter.
+func (m *model) filteredCommands() []command {
+	all := commands()
+	if m.cmdPaletteFilter == "" {
+		return all
+	}
+	filter := strings.ToLower(m.cmdPaletteFilter)
+	var result []command
+	for _, c := range all {
+		if strings.Contains(strings.ToLower(c.name), filter) {
+			result = append(result, c)
+		}
+	}
+	return result
+}
 
 // copyToClipboard copies text to the system clipboard using OS-specific commands
 func copyToClipboard(text string) error {
@@ -342,6 +463,95 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// In command palette mode
+	if m.cmdPaletteMode {
+		switch msg.Type {
+		case tea.KeyEsc:
+			m.cmdPaletteMode = false
+			m.cmdPaletteFilter = ""
+			m.cmdPaletteCursor = 0
+			m.cmdPaletteSelected = 0
+			return m, nil
+		case tea.KeyEnter:
+			filtered := m.filteredCommands()
+			if len(filtered) > 0 && m.cmdPaletteSelected < len(filtered) {
+				m.cmdPaletteMode = false
+				cmd := filtered[m.cmdPaletteSelected]
+				m.cmdPaletteFilter = ""
+				m.cmdPaletteCursor = 0
+				m.cmdPaletteSelected = 0
+				return cmd.action(m)
+			}
+			return m, nil
+		case tea.KeyUp:
+			if m.cmdPaletteSelected > 0 {
+				m.cmdPaletteSelected--
+			}
+			return m, nil
+		case tea.KeyDown:
+			filtered := m.filteredCommands()
+			if m.cmdPaletteSelected < len(filtered)-1 {
+				m.cmdPaletteSelected++
+			}
+			return m, nil
+		case tea.KeyLeft:
+			if msg.Alt {
+				pos := m.cmdPaletteCursor
+				for pos > 0 && m.cmdPaletteFilter[pos-1] == ' ' {
+					pos--
+				}
+				for pos > 0 && m.cmdPaletteFilter[pos-1] != ' ' {
+					pos--
+				}
+				m.cmdPaletteCursor = pos
+			} else if m.cmdPaletteCursor > 0 {
+				m.cmdPaletteCursor--
+			}
+			return m, nil
+		case tea.KeyRight:
+			if msg.Alt {
+				pos := m.cmdPaletteCursor
+				for pos < len(m.cmdPaletteFilter) && m.cmdPaletteFilter[pos] != ' ' {
+					pos++
+				}
+				for pos < len(m.cmdPaletteFilter) && m.cmdPaletteFilter[pos] == ' ' {
+					pos++
+				}
+				m.cmdPaletteCursor = pos
+			} else if m.cmdPaletteCursor < len(m.cmdPaletteFilter) {
+				m.cmdPaletteCursor++
+			}
+			return m, nil
+		case tea.KeyBackspace:
+			if msg.Alt {
+				if m.cmdPaletteCursor > 0 {
+					pos := m.cmdPaletteCursor
+					for pos > 0 && m.cmdPaletteFilter[pos-1] == ' ' {
+						pos--
+					}
+					for pos > 0 && m.cmdPaletteFilter[pos-1] != ' ' {
+						pos--
+					}
+					m.cmdPaletteFilter = m.cmdPaletteFilter[:pos] + m.cmdPaletteFilter[m.cmdPaletteCursor:]
+					m.cmdPaletteCursor = pos
+				}
+			} else if m.cmdPaletteCursor > 0 {
+				m.cmdPaletteFilter = m.cmdPaletteFilter[:m.cmdPaletteCursor-1] + m.cmdPaletteFilter[m.cmdPaletteCursor:]
+				m.cmdPaletteCursor--
+			}
+			m.cmdPaletteSelected = 0
+			return m, nil
+		default:
+			if len(msg.Runes) > 0 {
+				s := string(msg.Runes)
+				m.cmdPaletteFilter = m.cmdPaletteFilter[:m.cmdPaletteCursor] + s + m.cmdPaletteFilter[m.cmdPaletteCursor:]
+				m.cmdPaletteCursor += len(s)
+				m.cmdPaletteSelected = 0
+			}
+			return m, nil
+		}
+	}
+
 	// In filter mode, handle text input
 	if m.filterMode {
 		switch msg.Type {
@@ -516,6 +726,11 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "/":
 		m.filterMode = true
 		m.filterCursor = len(m.filter)
+	case ":":
+		m.cmdPaletteMode = true
+		m.cmdPaletteFilter = ""
+		m.cmdPaletteCursor = 0
+		m.cmdPaletteSelected = 0
 	case "?":
 		m.showHelp = true
 	case "y":
@@ -817,6 +1032,76 @@ func (m *model) updateFiltered() {
 	}
 }
 
+// renderCmdPaletteOverlay creates the command palette overlay box
+func (m model) renderCmdPaletteOverlay() (box string, boxWidth, boxHeight int) {
+	keyStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("241")) // dim
+
+	nameStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("252"))
+
+	selectedNameStyle := lipgloss.NewStyle().
+		Background(lipgloss.Color("15")).
+		Foreground(lipgloss.Color("#000000")).
+		Bold(true)
+
+	selectedKeyStyle := lipgloss.NewStyle().
+		Background(lipgloss.Color("15")).
+		Foreground(lipgloss.Color("241"))
+
+	filterStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("11"))
+
+	borderColor := lipgloss.Color("12")
+
+	allCommands := commands()
+	filtered := m.filteredCommands()
+
+	// Compute column width
+	const paletteWidth = 40
+	totalSlots := len(allCommands) // fixed height so box doesn't move
+
+	var content strings.Builder
+
+	// Filter input with bottom border
+	before := m.cmdPaletteFilter[:m.cmdPaletteCursor]
+	after := m.cmdPaletteFilter[m.cmdPaletteCursor:]
+	filterLine := filterStyle.Render(":"+before) + "█" + filterStyle.Render(after)
+	// Pad filter line to full width
+	filterVisual := lipgloss.Width(filterLine)
+	if filterVisual < paletteWidth {
+		filterLine += strings.Repeat(" ", paletteWidth-filterVisual)
+	}
+	content.WriteString(filterLine + "\n")
+	content.WriteString(lipgloss.NewStyle().Foreground(borderColor).Render(strings.Repeat("─", paletteWidth)) + "\n")
+
+	// Command list (fixed number of rows)
+	for i := range totalSlots {
+		if i < len(filtered) {
+			cmd := filtered[i]
+			gap := max(paletteWidth-lipgloss.Width(cmd.name)-lipgloss.Width(cmd.shortcut), 2)
+			if i == m.cmdPaletteSelected {
+				line := selectedNameStyle.Render(cmd.name+strings.Repeat(" ", gap)) + selectedKeyStyle.Render(cmd.shortcut)
+				content.WriteString(line + "\n")
+			} else {
+				content.WriteString(nameStyle.Render(cmd.name) + strings.Repeat(" ", gap) + keyStyle.Render(cmd.shortcut) + "\n")
+			}
+		} else {
+			content.WriteString(strings.Repeat(" ", paletteWidth) + "\n")
+		}
+	}
+
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(borderColor)
+
+	box = boxStyle.Render(content.String())
+	boxWidth = lipgloss.Width(box)
+	boxHeight = lipgloss.Height(box)
+
+	return box, boxWidth, boxHeight
+}
+
 // renderHelpOverlay creates the help box content (without positioning)
 func (m model) renderHelpOverlay() (box string, boxWidth, boxHeight int) {
 	keyStyle := lipgloss.NewStyle().
@@ -851,6 +1136,7 @@ func (m model) renderHelpOverlay() (box string, boxWidth, boxHeight int) {
 		{"r / Ctrl+r", "Reload command"},
 		{"c", "Stop running command"},
 		{"y", "Copy line to clipboard"},
+		{":", "Open command palette"},
 		{"q / Esc", "Quit"},
 		{"?", "Toggle this help"},
 	}
@@ -1069,6 +1355,12 @@ func (m *model) View() string {
 	// Overlay help if active
 	if m.showHelp {
 		box, boxWidth, boxHeight := m.renderHelpOverlay()
+		return overlayBox(mainView, box, boxWidth, boxHeight, m.width, m.height)
+	}
+
+	// Overlay command palette if active
+	if m.cmdPaletteMode {
+		box, boxWidth, boxHeight := m.renderCmdPaletteOverlay()
 		return overlayBox(mainView, box, boxWidth, boxHeight, m.width, m.height)
 	}
 

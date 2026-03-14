@@ -209,6 +209,7 @@ Configuration values are applied in this order (later sources override earlier o
 | `//`               | Toggle regex filter mode         |
 | `Esc`              | Exit filter mode / clear filter  |
 | `y`                | Yank (copy) selected line        |
+| `:`                | Open command palette             |
 | `?`                | Show help overlay                |
 
 ### Filter mode

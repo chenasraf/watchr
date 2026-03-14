@@ -355,7 +355,7 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		default:
-			if msg.Type == tea.KeyRunes {
+			if len(msg.Runes) > 0 {
 				m.filter += string(msg.Runes)
 				m.updateFiltered()
 			}

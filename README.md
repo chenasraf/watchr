@@ -204,6 +204,7 @@ Configuration values are applied in this order (later sources override earlier o
 | `PgUp`, `Ctrl-b`   | Full page up                     |
 | `p`                | Toggle preview pane              |
 | `+` / `-`          | Increase / decrease preview size |
+| `J` / `K`          | Scroll preview down / up         |
 | `/`                | Enter filter mode                |
 | `//`               | Toggle regex filter mode         |
 | `Esc`              | Exit filter mode / clear filter  |

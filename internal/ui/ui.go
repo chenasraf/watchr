@@ -52,6 +52,7 @@ type model struct {
 	filterRegex       bool  // true when filter is in regex mode
 	filterRegexErr    error // non-nil when regex pattern is invalid
 	showPreview       bool
+	previewOffset     int // scroll offset for preview pane
 	showHelp          bool // help overlay visible
 	width             int
 	height            int
@@ -451,10 +452,12 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.moveCursor(-1)
 	case "g", "home":
 		m.userScrolled = true
+		m.previewOffset = 0
 		m.cursor = 0
 		m.offset = 0
 	case "G", "end":
 		m.userScrolled = false // Resume following output
+		m.previewOffset = 0
 		if len(m.filtered) > 0 {
 			m.cursor = len(m.filtered) - 1
 			m.adjustOffset()
@@ -465,6 +468,15 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+u":
 		m.userScrolled = true
 		m.moveCursor(-m.visibleLines() / 2)
+	case "J":
+		if m.showPreview {
+			m.previewOffset++
+			m.clampPreviewOffset()
+		}
+	case "K":
+		if m.showPreview && m.previewOffset > 0 {
+			m.previewOffset--
+		}
 	case "pgdown", "ctrl+f":
 		m.userScrolled = true
 		m.moveCursor(m.visibleLines())
@@ -528,6 +540,7 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) moveCursor(delta int) {
+	m.previewOffset = 0
 	m.cursor += delta
 	if m.cursor < 0 {
 		m.cursor = 0
@@ -563,6 +576,55 @@ func previewSizeStep(isPercent bool) int {
 		return 5
 	}
 	return 2
+}
+
+// clampPreviewOffset computes the actual preview content size and clamps
+// previewOffset so it can't exceed the scrollable range.
+func (m *model) clampPreviewOffset() {
+	if !m.showPreview || m.cursor < 0 || m.cursor >= len(m.filtered) {
+		m.previewOffset = 0
+		return
+	}
+	idx := m.filtered[m.cursor]
+	if idx >= len(m.lines) {
+		m.previewOffset = 0
+		return
+	}
+
+	content := highlightJSON(m.lines[idx].Content)
+	innerWidth := m.width - 2
+
+	var previewW, visibleH int
+	switch m.config.PreviewPosition {
+	case PreviewTop, PreviewBottom:
+		previewW = innerWidth
+		visibleH = m.previewSize()
+	case PreviewLeft:
+		previewW = m.previewSize()
+		visibleH = m.visibleLines()
+	case PreviewRight:
+		previewW = m.previewSize()
+		visibleH = m.visibleLines()
+	}
+
+	previewLines := wrapPreviewContent(content, previewW)
+	maxOffset := max(len(previewLines)-visibleH, 0)
+	if m.previewOffset > maxOffset {
+		m.previewOffset = maxOffset
+	}
+}
+
+// applyPreviewOffset slices previewLines based on the current preview scroll
+// offset, clamping the offset so it doesn't scroll past the content.
+func (m *model) applyPreviewOffset(previewLines []string, visibleH int) []string {
+	maxOffset := max(len(previewLines)-visibleH, 0)
+	if m.previewOffset > maxOffset {
+		m.previewOffset = maxOffset
+	}
+	if m.previewOffset > 0 {
+		previewLines = previewLines[m.previewOffset:]
+	}
+	return previewLines
 }
 
 func (m model) previewSize() int {
@@ -781,6 +843,7 @@ func (m model) renderHelpOverlay() (box string, boxWidth, boxHeight int) {
 		{"", ""},
 		{"p", "Toggle preview pane"},
 		{"+/-", "Resize preview pane"},
+		{"J / K", "Scroll preview down / up"},
 		{"/", "Enter filter mode"},
 		{"//", "Toggle regex filter mode"},
 		{"Esc", "Exit filter / clear"},
@@ -1312,6 +1375,8 @@ func (m model) renderMainView() string {
 			if previewContent != "" {
 				previewLines = wrapPreviewContent(previewContent, innerWidth)
 			}
+			// Apply preview scroll offset
+			previewLines = m.applyPreviewOffset(previewLines, previewH)
 			// Pad preview to height
 			for len(previewLines) < previewH {
 				previewLines = append(previewLines, "")
@@ -1370,6 +1435,8 @@ func (m model) renderMainView() string {
 				}
 				previewLines = wrapPreviewContent(previewContent, previewW)
 			}
+			// Apply preview scroll offset
+			previewLines = m.applyPreviewOffset(previewLines, listHeight)
 			for len(previewLines) < listHeight {
 				previewLines = append(previewLines, "")
 			}

@@ -598,6 +598,9 @@ func truncateToWidth(s string, maxWidth int) string {
 }
 
 // wrapText wraps text to fit within the given width, returning multiple lines.
+// It is ANSI-aware: escape sequences are preserved intact and don't count
+// toward the visible width. When a line wraps, any active ANSI state is
+// carried over so colours continue on the next line.
 func wrapText(s string, width int) []string {
 	if width <= 0 {
 		return nil
@@ -607,27 +610,82 @@ func wrapText(s string, width int) []string {
 	}
 
 	var lines []string
-	currentLine := ""
+	var currentLine strings.Builder
 	currentWidth := 0
+	// Track the last seen ANSI escape so we can re-apply it after a wrap
+	var activeANSI string
 
-	for _, r := range s {
+	i := 0
+	runes := []rune(s)
+	for i < len(runes) {
+		// Check for ANSI escape sequence: ESC [ ... final_byte
+		if runes[i] == '\033' && i+1 < len(runes) && runes[i+1] == '[' {
+			// Consume entire escape sequence
+			var seq strings.Builder
+			seq.WriteRune(runes[i]) // ESC
+			i++
+			seq.WriteRune(runes[i]) // [
+			i++
+			for i < len(runes) {
+				seq.WriteRune(runes[i])
+				// Final byte of CSI sequence is in range 0x40-0x7E
+				if runes[i] >= 0x40 && runes[i] <= 0x7E {
+					i++
+					break
+				}
+				i++
+			}
+			seqStr := seq.String()
+			currentLine.WriteString(seqStr)
+			// Track reset vs color sequences
+			if seqStr == "\033[0m" || seqStr == "\033[m" {
+				activeANSI = ""
+			} else {
+				activeANSI = seqStr
+			}
+			continue
+		}
+
+		r := runes[i]
 		runeWidth := lipgloss.Width(string(r))
 		if currentWidth+runeWidth > width {
-			// Start new line
-			lines = append(lines, currentLine)
-			currentLine = string(r)
-			currentWidth = runeWidth
-		} else {
-			currentLine += string(r)
-			currentWidth += runeWidth
+			// Close any active ANSI on this line before wrapping
+			if activeANSI != "" {
+				currentLine.WriteString("\033[0m")
+			}
+			lines = append(lines, currentLine.String())
+			currentLine.Reset()
+			currentWidth = 0
+			// Re-apply active ANSI on the new line
+			if activeANSI != "" {
+				currentLine.WriteString(activeANSI)
+			}
 		}
+		currentLine.WriteRune(r)
+		currentWidth += runeWidth
+		i++
 	}
 	// Don't forget the last line
-	if currentLine != "" {
-		lines = append(lines, currentLine)
+	if currentLine.Len() > 0 {
+		lines = append(lines, currentLine.String())
 	}
 
 	return lines
+}
+
+// wrapPreviewContent splits multi-line content (e.g. pretty-printed JSON) by
+// newlines first, then wraps each line to fit within the given width.
+func wrapPreviewContent(s string, width int) []string {
+	var result []string
+	for line := range strings.SplitSeq(s, "\n") {
+		if line == "" {
+			result = append(result, "")
+			continue
+		}
+		wrapped := wrapText(line, width)
+		result = append(result, wrapped...)
+	}
+	return result
 }
 
 func (m *model) updateFiltered() {
@@ -1178,7 +1236,7 @@ func (m model) renderMainView() string {
 	if m.showPreview && len(m.filtered) > 0 && m.cursor >= 0 && m.cursor < len(m.filtered) {
 		idx := m.filtered[m.cursor]
 		if idx < len(m.lines) {
-			previewContent = m.lines[idx].Content
+			previewContent = highlightJSON(m.lines[idx].Content)
 		}
 	}
 
@@ -1231,7 +1289,7 @@ func (m model) renderMainView() string {
 			var previewLines []string
 			// Wrap preview content to fit width
 			if previewContent != "" {
-				previewLines = wrapText(previewContent, innerWidth)
+				previewLines = wrapPreviewContent(previewContent, innerWidth)
 			}
 			// Pad preview to height
 			for len(previewLines) < previewH {
@@ -1285,12 +1343,11 @@ func (m model) renderMainView() string {
 			// Prepare preview lines (wrap text instead of truncating)
 			var previewLines []string
 			if previewContent != "" {
-				// Determine preview width for wrapping
 				previewW := leftW
 				if m.config.PreviewPosition == PreviewRight {
 					previewW = rightW
 				}
-				previewLines = wrapText(previewContent, previewW)
+				previewLines = wrapPreviewContent(previewContent, previewW)
 			}
 			for len(previewLines) < listHeight {
 				previewLines = append(previewLines, "")

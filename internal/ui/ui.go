@@ -474,6 +474,19 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "p":
 		m.showPreview = !m.showPreview
 		m.adjustOffset() // Keep selected line visible after preview toggle
+	case "+", "=":
+		if m.showPreview {
+			m.config.PreviewSize += previewSizeStep(m.config.PreviewSizeIsPercent)
+			m.adjustOffset()
+		}
+	case "-":
+		if m.showPreview {
+			step := previewSizeStep(m.config.PreviewSizeIsPercent)
+			if m.config.PreviewSize > step {
+				m.config.PreviewSize -= step
+				m.adjustOffset()
+			}
+		}
 	case "r", "ctrl+r":
 		// Restart streaming and reset auto-refresh timer
 		m.refreshGeneration++
@@ -543,6 +556,13 @@ func (m *model) adjustOffset() {
 	idealOffset = min(idealOffset, maxOffset)
 
 	m.offset = idealOffset
+}
+
+func previewSizeStep(isPercent bool) int {
+	if isPercent {
+		return 5
+	}
+	return 2
 }
 
 func (m model) previewSize() int {
@@ -760,6 +780,7 @@ func (m model) renderHelpOverlay() (box string, boxWidth, boxHeight int) {
 		{"Ctrl+f / Ctrl+b", "Full page down / up"},
 		{"", ""},
 		{"p", "Toggle preview pane"},
+		{"+/-", "Resize preview pane"},
 		{"/", "Enter filter mode"},
 		{"//", "Toggle regex filter mode"},
 		{"Esc", "Exit filter / clear"},

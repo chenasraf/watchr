@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -46,7 +47,10 @@ type model struct {
 	cursor            int   // cursor position in filtered list
 	offset            int   // scroll offset for visible window
 	filter            string
+	filterCursor      int   // cursor position within filter string
 	filterMode        bool
+	filterRegex       bool  // true when filter is in regex mode
+	filterRegexErr    error // non-nil when regex pattern is invalid
 	showPreview       bool
 	showHelp          bool // help overlay visible
 	width             int
@@ -343,21 +347,79 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case tea.KeyEsc:
 			m.filterMode = false
 			m.filter = ""
+			m.filterCursor = 0
+			m.filterRegex = false
+			m.filterRegexErr = nil
 			m.updateFiltered()
 			return m, nil
 		case tea.KeyEnter:
 			m.filterMode = false
 			return m, nil
+		case tea.KeyLeft:
+			if msg.Alt {
+				// Alt+Left: move to previous word boundary
+				pos := m.filterCursor
+				for pos > 0 && m.filter[pos-1] == ' ' {
+					pos--
+				}
+				for pos > 0 && m.filter[pos-1] != ' ' {
+					pos--
+				}
+				m.filterCursor = pos
+			} else if m.filterCursor > 0 {
+				m.filterCursor--
+			}
+			return m, nil
+		case tea.KeyRight:
+			if msg.Alt {
+				// Alt+Right: move to next word boundary
+				pos := m.filterCursor
+				for pos < len(m.filter) && m.filter[pos] != ' ' {
+					pos++
+				}
+				for pos < len(m.filter) && m.filter[pos] == ' ' {
+					pos++
+				}
+				m.filterCursor = pos
+			} else if m.filterCursor < len(m.filter) {
+				m.filterCursor++
+			}
+			return m, nil
 		case tea.KeyBackspace:
-			if len(m.filter) > 0 {
-				m.filter = m.filter[:len(m.filter)-1]
+			if msg.Alt {
+				// Alt+Backspace: delete word behind cursor
+				if m.filterCursor > 0 {
+					pos := m.filterCursor
+					// Skip trailing spaces
+					for pos > 0 && m.filter[pos-1] == ' ' {
+						pos--
+					}
+					// Skip word characters
+					for pos > 0 && m.filter[pos-1] != ' ' {
+						pos--
+					}
+					m.filter = m.filter[:pos] + m.filter[m.filterCursor:]
+					m.filterCursor = pos
+					m.updateFiltered()
+				}
+			} else if m.filterCursor > 0 {
+				m.filter = m.filter[:m.filterCursor-1] + m.filter[m.filterCursor:]
+				m.filterCursor--
 				m.updateFiltered()
 			}
 			return m, nil
 		default:
 			if len(msg.Runes) > 0 {
-				m.filter += string(msg.Runes)
-				m.updateFiltered()
+				s := string(msg.Runes)
+				if s == "/" && m.filter == "" {
+					m.filterRegex = !m.filterRegex
+					m.filterRegexErr = nil
+					m.updateFiltered()
+				} else {
+					m.filter = m.filter[:m.filterCursor] + s + m.filter[m.filterCursor:]
+					m.filterCursor += len(s)
+					m.updateFiltered()
+				}
 			}
 			return m, nil
 		}
@@ -370,8 +432,11 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "esc":
 		// Clear filter if active, otherwise quit
-		if m.filter != "" {
+		if m.filter != "" || m.filterRegex {
 			m.filter = ""
+			m.filterCursor = 0
+			m.filterRegex = false
+			m.filterRegexErr = nil
 			m.updateFiltered()
 			return m, nil
 		}
@@ -426,6 +491,7 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "/":
 		m.filterMode = true
 		m.filter = ""
+		m.filterCursor = 0
 	case "?":
 		m.showHelp = true
 	case "y":
@@ -567,11 +633,29 @@ func wrapText(s string, width int) []string {
 
 func (m *model) updateFiltered() {
 	m.filtered = []int{}
+	m.filterRegexErr = nil
 
-	filter := strings.ToLower(m.filter)
-	for i, line := range m.lines {
-		if m.filter == "" || strings.Contains(strings.ToLower(line.Content), filter) {
-			m.filtered = append(m.filtered, i)
+	if m.filterRegex && m.filter != "" {
+		re, err := regexp.Compile("(?i)" + m.filter)
+		if err != nil {
+			m.filterRegexErr = err
+			// Show all lines when regex is invalid
+			for i := range m.lines {
+				m.filtered = append(m.filtered, i)
+			}
+		} else {
+			for i, line := range m.lines {
+				if re.MatchString(line.Content) {
+					m.filtered = append(m.filtered, i)
+				}
+			}
+		}
+	} else {
+		filter := strings.ToLower(m.filter)
+		for i, line := range m.lines {
+			if m.filter == "" || strings.Contains(strings.ToLower(line.Content), filter) {
+				m.filtered = append(m.filtered, i)
+			}
 		}
 	}
 
@@ -620,6 +704,7 @@ func (m model) renderHelpOverlay() (box string, boxWidth, boxHeight int) {
 		{"", ""},
 		{"p", "Toggle preview pane"},
 		{"/", "Enter filter mode"},
+		{"//", "Toggle regex filter mode"},
 		{"Esc", "Exit filter / clear"},
 		{"", ""},
 		{"r / Ctrl+r", "Reload command"},
@@ -882,6 +967,12 @@ func (m model) renderMainView() string {
 	filterStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("11"))
 
+	filterRegexStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("13"))
+
+	filterErrStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("9"))
+
 	// Inner width (excluding border characters)
 	innerWidth := m.width - 2
 
@@ -963,8 +1054,21 @@ func (m model) renderMainView() string {
 	// Build prompt line (will go at bottom)
 	var promptLine string
 	switch {
+	case m.filterMode && m.filterRegex:
+		label := filterRegexStyle.Render("regex/")
+		before := m.filter[:m.filterCursor]
+		after := m.filter[m.filterCursor:]
+		input := filterStyle.Render(before) + "█" + filterStyle.Render(after)
+		promptLine = label + input
+		if m.filterRegexErr != nil {
+			promptLine += " " + filterErrStyle.Render("(invalid regex)")
+		}
 	case m.filterMode:
-		promptLine = filterStyle.Render(fmt.Sprintf("/%s█", m.filter))
+		before := m.filter[:m.filterCursor]
+		after := m.filter[m.filterCursor:]
+		promptLine = filterStyle.Render("/"+before) + "█" + filterStyle.Render(after)
+	case m.filter != "" && m.filterRegex:
+		promptLine = promptStyle.Render(fmt.Sprintf("%s (regex: %s)", m.config.Prompt, m.filter))
 	case m.filter != "":
 		promptLine = promptStyle.Render(fmt.Sprintf("%s (filter: %s)", m.config.Prompt, m.filter))
 	default:

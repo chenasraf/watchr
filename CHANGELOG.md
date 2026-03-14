@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.8.0](https://github.com/chenasraf/watchr/compare/v1.7.0...v1.8.0) (2026-03-14)
+
+
+### Features
+
+* command pallete ([140574e](https://github.com/chenasraf/watchr/commit/140574e512a03e5ddaa70af03c66d83a0d00d5fb))
+* J/K to scroll preview pane ([0c6fc52](https://github.com/chenasraf/watchr/commit/0c6fc521bca0d4781caa2a26ae16bc802a2164d9))
+* preview window json syntax highlighting ([1bd3722](https://github.com/chenasraf/watchr/commit/1bd37227c48593994298cf572edc2a79c8f88ee9))
+* regex filtering + cursor filter navigation ([3133051](https://github.com/chenasraf/watchr/commit/31330513f812c148370d6cdc4fb94dadc5884411))
+* resize preview pane with +/- ([5174073](https://github.com/chenasraf/watchr/commit/51740732362d7a74235ee3ffbc66abd3ca4f43d8))
+
+
+### Bug Fixes
+
+* accept all characters when filtering ([0f67db3](https://github.com/chenasraf/watchr/commit/0f67db342f6d7aa01caba1a89124305204cf7c4a))
+* continue existing filter when entering filter mode ([561c98a](https://github.com/chenasraf/watchr/commit/561c98ae02563482aec054ef4deb30ba3ff8c9f1))
+
 ## [1.7.0](https://github.com/chenasraf/watchr/compare/v1.6.0...v1.7.0) (2026-01-26)
 
 

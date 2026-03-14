@@ -47,7 +47,7 @@ type model struct {
 	cursor            int   // cursor position in filtered list
 	offset            int   // scroll offset for visible window
 	filter            string
-	filterCursor      int   // cursor position within filter string
+	filterCursor      int // cursor position within filter string
 	filterMode        bool
 	filterRegex       bool  // true when filter is in regex mode
 	filterRegexErr    error // non-nil when regex pattern is invalid
@@ -490,8 +490,7 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "/":
 		m.filterMode = true
-		m.filter = ""
-		m.filterCursor = 0
+		m.filterCursor = len(m.filter)
 	case "?":
 		m.showHelp = true
 	case "y":

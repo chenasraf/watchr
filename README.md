@@ -14,8 +14,9 @@ provides vim-style navigation, filtering, and a preview pane—all without leavi
 ## 🚀 Features
 
 - **Interactive output viewer**: Browse command output with vim-style keybindings
-- **Live filtering**: Press `/` to filter output lines in real-time
-- **Preview pane**: Toggle a preview panel (bottom, top, left, or right)
+- **Live filtering**: Press `/` to filter output lines in real-time, with regex support (`//`)
+- **Preview pane**: Toggle a resizable preview panel (bottom, top, left, or right) with JSON syntax
+  highlighting
 - **Auto-refresh**: Optionally re-run commands at specified intervals
 - **Line numbers**: Optional line numbering with configurable width
 - **Config files**: YAML, TOML, or JSON config files for persistent settings
@@ -118,7 +119,8 @@ Options:
 
 ## 📁 Configuration File
 
-`watchr` supports configuration files in YAML, TOML, or JSON format. Settings in config files serve as defaults that can be overridden by command-line flags.
+`watchr` supports configuration files in YAML, TOML, or JSON format. Settings in config files serve
+as defaults that can be overridden by command-line flags.
 
 ### Config File Locations
 
@@ -131,18 +133,20 @@ Config files are searched in the following order (later files override earlier o
 ### Example Configurations
 
 **YAML** (`watchr.yaml`):
+
 ```yaml
 shell: bash
-preview-size: "50%"
+preview-size: '50%'
 preview-position: right
 line-numbers: true
 line-width: 4
-prompt: "> "
-refresh: 0           # disabled; or use: 2, 1.5, "500ms", "2s", "5m", "1h"
+prompt: '> '
+refresh: 0 # disabled; or use: 2, 1.5, "500ms", "2s", "5m", "1h"
 interactive: false
 ```
 
 **TOML** (`watchr.toml`):
+
 ```toml
 shell = "bash"
 preview-size = "50%"
@@ -150,11 +154,12 @@ preview-position = "right"
 line-numbers = true
 line-width = 4
 prompt = "> "
-refresh = 0          # disabled; or use: 2, 1.5, "500ms", "2s", "5m", "1h"
+refresh = 0 # disabled; or use: 2, 1.5, "500ms", "2s", "5m", "1h"
 interactive = false
 ```
 
 **JSON** (`watchr.json`):
+
 ```json
 {
   "shell": "bash",
@@ -169,6 +174,7 @@ interactive = false
 ```
 
 The `refresh` option accepts:
+
 - Numbers: `2` or `1.5` (interpreted as seconds)
 - Explicit units: `"500ms"`, `"2s"`, `"5m"`, `"1h"`
 
@@ -185,21 +191,38 @@ Configuration values are applied in this order (later sources override earlier o
 
 ## ⌨️ Keybindings
 
-| Key                | Action                          |
-| ------------------ | ------------------------------- |
-| `r`, `Ctrl-r`      | Reload (re-run command)         |
-| `q`, `Esc`         | Quit                            |
-| `j`, `k`           | Move down/up                    |
-| `g`                | Go to first line                |
-| `G`                | Go to last line                 |
-| `Ctrl-d`, `Ctrl-u` | Half page down/up               |
-| `PgDn`, `Ctrl-f`   | Full page down                  |
-| `PgUp`, `Ctrl-b`   | Full page up                    |
-| `p`                | Toggle preview pane             |
-| `/`                | Enter filter mode               |
-| `Esc`              | Exit filter mode / clear filter |
-| `y`                | Yank (copy) selected line       |
-| `?`                | Show help overlay               |
+| Key                | Action                           |
+| ------------------ | -------------------------------- |
+| `r`, `Ctrl-r`      | Reload (re-run command)          |
+| `c`                | Stop running command             |
+| `q`, `Esc`         | Quit                             |
+| `j`, `k`           | Move down/up                     |
+| `g`                | Go to first line                 |
+| `G`                | Go to last line                  |
+| `Ctrl-d`, `Ctrl-u` | Half page down/up                |
+| `PgDn`, `Ctrl-f`   | Full page down                   |
+| `PgUp`, `Ctrl-b`   | Full page up                     |
+| `p`                | Toggle preview pane              |
+| `+` / `-`          | Increase / decrease preview size |
+| `/`                | Enter filter mode                |
+| `//`               | Toggle regex filter mode         |
+| `Esc`              | Exit filter mode / clear filter  |
+| `y`                | Yank (copy) selected line        |
+| `?`                | Show help overlay                |
+
+### Filter mode
+
+When in filter mode (`/`), the following keys are available:
+
+| Key                      | Action                                   |
+| ------------------------ | ---------------------------------------- |
+| `Enter`                  | Confirm filter                           |
+| `Esc`                    | Cancel and clear filter                  |
+| `Left` / `Right`         | Move cursor within filter                |
+| `Alt-Left` / `Alt-Right` | Move cursor by word                      |
+| `Backspace`              | Delete character before cursor           |
+| `Alt-Backspace`          | Delete word before cursor                |
+| `/`                      | Toggle regex mode (when filter is empty) |
 
 ---
 
@@ -210,7 +233,7 @@ very helpful to sustaining its life. If you are feeling incredibly generous and 
 just a small amount to help sustain this project, I would be very very thankful!
 
 <a href='https://ko-fi.com/casraf' target='_blank'>
-<img height='36' style='border:0px;height:36px;' src='https://cdn.ko-fi.com/cdn/kofi1.png?v=3' alt='Buy Me a Coffee at ko-fi.com' />
+  <img height='36' style='border:0px;height:36px;' src='https://cdn.ko-fi.com/cdn/kofi1.png?v=3' alt='Buy Me a Coffee at ko-fi.com' />
 </a>
 
 I welcome any issues or pull requests on GitHub. If you find a bug, or would like a new feature,

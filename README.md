@@ -101,18 +101,19 @@ watchr -r 5 "find . -name '*.go' -mmin -1"
 Usage: watchr [options] <command to run>
 
 Options:
-  -h, --help                       Show help
-  -v, --version                    Show version
-  -c, --config string              Load config from specified path
-  -C, --show-config                Show loaded configuration and exit
-  -r, --refresh string             Auto-refresh interval (e.g., 1, 1.5, 500ms, 2s, 5m, 1h; default unit: seconds, 0 = disabled)
-  -p, --prompt string              Prompt string (default "watchr> ")
-  -s, --shell string               Shell to use for executing commands (default "sh")
-  -n, --no-line-numbers            Disable line numbers
-  -w, --line-width int             Line number width (default 6)
-  -P, --preview-size string        Preview size: number for lines/cols, or number% for percentage (default "40%")
-  -o, --preview-position string    Preview position: bottom, top, left, right (default "bottom")
-  -i, --interactive                Run shell in interactive mode (sources ~/.bashrc, ~/.zshrc, etc.)
+  -c, --config string             Load config from specified path
+  -h, --help                      Show help
+  -i, --interactive               Run shell in interactive mode (sources ~/.bashrc, ~/.zshrc, etc.)
+  -w, --line-width int            Line number width (default 6)
+  -n, --no-line-numbers           Disable line numbers
+  -o, --preview-position string   Preview position: bottom, top, left, right (default "bottom")
+  -P, --preview-size string       Preview size: number for lines/cols, or number% for percentage (e.g., 10 or 40%) (default "40%")
+  -p, --prompt string             Prompt string (default "watchr> ")
+  -r, --refresh string            Auto-refresh interval (e.g., 1, 1.5, 500ms, 2s, 5m, 1h; default unit: seconds, 0 = disabled) (default "0")
+      --refresh-from-start        Start refresh timer when command starts (default: when command ends)
+  -s, --shell string              Shell to use for executing commands (default "sh")
+  -C, --show-config               Show loaded configuration and exit
+  -v, --version                   Show version
 ```
 
 ---
@@ -209,6 +210,7 @@ Configuration values are applied in this order (later sources override earlier o
 | `//`               | Toggle regex filter mode         |
 | `Esc`              | Exit filter mode / clear filter  |
 | `y`                | Yank (copy) selected line        |
+| `Y`                | Yank selected line (plain text)  |
 | `:`                | Open command palette             |
 | `?`                | Show help overlay                |
 

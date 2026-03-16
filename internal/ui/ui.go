@@ -188,6 +188,21 @@ func commands() []command {
 			}
 			return m, nil
 		}},
+		{"Copy line (plain text)", "Y", func(m *model) (tea.Model, tea.Cmd) {
+			if len(m.filtered) > 0 && m.cursor >= 0 && m.cursor < len(m.filtered) {
+				idx := m.filtered[m.cursor]
+				if idx < len(m.lines) {
+					content := stripANSI(m.lines[idx].Content)
+					if err := copyToClipboard(content); err != nil {
+						m.statusMsg = "Failed to copy"
+					} else {
+						m.statusMsg = "Copied to clipboard (plain)"
+					}
+					return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg { return clearStatusMsg{} })
+				}
+			}
+			return m, nil
+		}},
 		{"Show help", "?", func(m *model) (tea.Model, tea.Cmd) {
 			m.showHelp = true
 			return m, nil
@@ -734,7 +749,7 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "?":
 		m.showHelp = true
 	case "y":
-		// Yank (copy) selected line to clipboard
+		// Yank (copy) selected line to clipboard (with ANSI codes)
 		if len(m.filtered) > 0 && m.cursor >= 0 && m.cursor < len(m.filtered) {
 			idx := m.filtered[m.cursor]
 			if idx < len(m.lines) {
@@ -743,6 +758,22 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.statusMsg = "Failed to copy"
 				} else {
 					m.statusMsg = "Copied to clipboard"
+				}
+				return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
+					return clearStatusMsg{}
+				})
+			}
+		}
+	case "Y":
+		// Yank (copy) selected line to clipboard, stripping ANSI codes
+		if len(m.filtered) > 0 && m.cursor >= 0 && m.cursor < len(m.filtered) {
+			idx := m.filtered[m.cursor]
+			if idx < len(m.lines) {
+				content := stripANSI(m.lines[idx].Content)
+				if err := copyToClipboard(content); err != nil {
+					m.statusMsg = "Failed to copy"
+				} else {
+					m.statusMsg = "Copied to clipboard (plain)"
 				}
 				return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
 					return clearStatusMsg{}
@@ -1136,6 +1167,7 @@ func (m model) renderHelpOverlay() (box string, boxWidth, boxHeight int) {
 		{"r / Ctrl+r", "Reload command"},
 		{"c", "Stop running command"},
 		{"y", "Copy line to clipboard"},
+		{"Y", "Copy line (plain text)"},
 		{":", "Open command palette"},
 		{"q / Esc", "Quit"},
 		{"?", "Toggle this help"},
@@ -1570,6 +1602,9 @@ func (m model) renderMainView() string {
 			content := truncateToWidth(line.Content, contentWidth)
 
 			if isSelected {
+				// For selected line: strip ANSI so highlight colors aren't mixed with content colors
+				plainContent := stripANSI(content)
+
 				// For selected line: gray line number + black content, both on white background
 				selectedLineNumStyle := lipgloss.NewStyle().
 					Background(lipgloss.Color("15")).
@@ -1580,10 +1615,10 @@ func (m model) renderMainView() string {
 					Bold(true)
 
 				// Pad content to fill remaining width
-				contentPadded := content
-				padding := fullWidth - lineNumWidth - lipgloss.Width(content)
+				contentPadded := plainContent
+				padding := fullWidth - lineNumWidth - len(plainContent)
 				if padding > 0 {
-					contentPadded = content + strings.Repeat(" ", padding)
+					contentPadded = plainContent + strings.Repeat(" ", padding)
 				}
 				lineText = selectedLineNumStyle.Render(lineNumStr) + selectedContentStyle.Render(contentPadded)
 			} else {
@@ -1595,8 +1630,10 @@ func (m model) renderMainView() string {
 			lineText = truncateToWidth(line.Content, listWidth)
 
 			if isSelected {
+				// Strip ANSI so highlight colors aren't mixed with content colors
+				lineText = stripANSI(lineText)
 				// Pad to full width for selection highlight
-				padding := fullWidth - lipgloss.Width(lineText)
+				padding := fullWidth - len(lineText)
 				if padding > 0 {
 					lineText += strings.Repeat(" ", padding)
 				}

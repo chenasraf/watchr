@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.0](https://github.com/chenasraf/watchr/compare/v1.8.0...v1.9.0) (2026-03-16)
+
+
+### Features
+
+* add copy as plain ([85437c7](https://github.com/chenasraf/watchr/commit/85437c7ce0432a1bfce07e51bda90f4800d2059a))
+
 ## [1.8.0](https://github.com/chenasraf/watchr/compare/v1.7.0...v1.8.0) (2026-03-14)
 
 

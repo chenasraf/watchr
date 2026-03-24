@@ -195,6 +195,9 @@ Configuration values are applied in this order (later sources override earlier o
 | Key                | Action                           |
 | ------------------ | -------------------------------- |
 | `r`, `Ctrl-r`      | Reload (re-run command)          |
+| `R`                | Reload & clear all lines         |
+| `Del`              | Delete selected line             |
+| `Ctrl-Del`         | Clear all lines (with confirm)   |
 | `c`                | Stop running command             |
 | `q`, `Esc`         | Quit                             |
 | `j`, `k`           | Move down/up                     |

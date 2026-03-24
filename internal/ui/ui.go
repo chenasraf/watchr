@@ -75,6 +75,10 @@ type model struct {
 	cmdPaletteFilter   string // current filter text
 	cmdPaletteCursor   int    // cursor position within filter string
 	cmdPaletteSelected int    // selected item index in filtered list
+
+	confirmMode    bool   // whether a confirmation dialog is visible
+	confirmMessage string // message to display in confirmation dialog
+	confirmAction  func(m *model) (tea.Model, tea.Cmd)
 }
 
 // messages
@@ -113,6 +117,34 @@ func commands() []command {
 			m.refreshGeneration++
 			cmd := m.startStreaming()
 			return m, tea.Batch(cmd, m.spinnerTickCmd())
+		}},
+		{"Reload & clear lines", "R", func(m *model) (tea.Model, tea.Cmd) {
+			m.lines = nil
+			m.updateFiltered()
+			m.refreshGeneration++
+			cmd := m.startStreaming()
+			return m, tea.Batch(cmd, m.spinnerTickCmd())
+		}},
+		{"Delete selected line", "Del", func(m *model) (tea.Model, tea.Cmd) {
+			if len(m.filtered) > 0 && m.cursor >= 0 && m.cursor < len(m.filtered) {
+				idx := m.filtered[m.cursor]
+				if idx < len(m.lines) {
+					m.lines = append(m.lines[:idx], m.lines[idx+1:]...)
+					m.updateFiltered()
+				}
+			}
+			return m, nil
+		}},
+		{"Clear all lines", "Ctrl+Del", func(m *model) (tea.Model, tea.Cmd) {
+			m.confirmMode = true
+			m.confirmMessage = "Clear all lines? (y/N)"
+			m.confirmAction = func(m *model) (tea.Model, tea.Cmd) {
+				m.lines = nil
+				m.updateFiltered()
+				m.statusMsg = "All lines cleared"
+				return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg { return clearStatusMsg{} })
+			}
+			return m, nil
 		}},
 		{"Stop running command", "c", func(m *model) (tea.Model, tea.Cmd) {
 			if m.streaming {
@@ -478,6 +510,20 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// In confirmation mode, y confirms and any other key cancels
+	if m.confirmMode {
+		switch msg.String() {
+		case "y", "Y":
+			m.confirmMode = false
+			if m.confirmAction != nil {
+				return m.confirmAction(m)
+			}
+		default:
+			m.confirmMode = false
+		}
+		return m, nil
+	}
+
 	// In command palette mode
 	if m.cmdPaletteMode {
 		switch msg.Type {
@@ -729,6 +775,33 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.refreshGeneration++
 		cmd := m.startStreaming()
 		return m, tea.Batch(cmd, m.spinnerTickCmd())
+	case "R":
+		// Refresh command and clear all lines
+		m.lines = nil
+		m.updateFiltered()
+		m.refreshGeneration++
+		cmd := m.startStreaming()
+		return m, tea.Batch(cmd, m.spinnerTickCmd())
+	case "delete":
+		// Delete the currently selected line
+		if len(m.filtered) > 0 && m.cursor >= 0 && m.cursor < len(m.filtered) {
+			idx := m.filtered[m.cursor]
+			if idx < len(m.lines) {
+				m.lines = append(m.lines[:idx], m.lines[idx+1:]...)
+				m.updateFiltered()
+			}
+		}
+	case "ctrl+delete":
+		// Clear all lines with confirmation
+		m.confirmMode = true
+		m.confirmMessage = "Clear all lines? (y/N)"
+		m.confirmAction = func(m *model) (tea.Model, tea.Cmd) {
+			m.lines = nil
+			m.updateFiltered()
+			m.statusMsg = "All lines cleared"
+			return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg { return clearStatusMsg{} })
+		}
+		return m, nil
 	case "c":
 		// Stop the running command if one is running
 		if m.streaming {
@@ -1165,6 +1238,9 @@ func (m model) renderHelpOverlay() (box string, boxWidth, boxHeight int) {
 		{"Esc", "Exit filter / clear"},
 		{"", ""},
 		{"r / Ctrl+r", "Reload command"},
+		{"R", "Reload & clear lines"},
+		{"Del", "Delete selected line"},
+		{"Ctrl+Del", "Clear all lines"},
 		{"c", "Stop running command"},
 		{"y", "Copy line to clipboard"},
 		{"Y", "Copy line (plain text)"},
@@ -1198,6 +1274,24 @@ func (m model) renderHelpOverlay() (box string, boxWidth, boxHeight int) {
 		Padding(1, 2)
 
 	box = boxStyle.Render(content.String())
+	boxWidth = lipgloss.Width(box)
+	boxHeight = lipgloss.Height(box)
+
+	return box, boxWidth, boxHeight
+}
+
+// renderConfirmOverlay creates a confirmation dialog overlay
+func (m model) renderConfirmOverlay() (box string, boxWidth, boxHeight int) {
+	msgStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("252"))
+
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("11")).
+		Padding(1, 2)
+
+	content := msgStyle.Render(m.confirmMessage)
+	box = boxStyle.Render(content)
 	boxWidth = lipgloss.Width(box)
 	boxHeight = lipgloss.Height(box)
 
@@ -1393,6 +1487,12 @@ func (m *model) View() string {
 	// Overlay command palette if active
 	if m.cmdPaletteMode {
 		box, boxWidth, boxHeight := m.renderCmdPaletteOverlay()
+		return overlayBox(mainView, box, boxWidth, boxHeight, m.width, m.height)
+	}
+
+	// Overlay confirmation dialog if active
+	if m.confirmMode {
+		box, boxWidth, boxHeight := m.renderConfirmOverlay()
 		return overlayBox(mainView, box, boxWidth, boxHeight, m.width, m.height)
 	}
 

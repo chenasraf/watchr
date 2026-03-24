@@ -45,8 +45,7 @@ func (m *model) handleCmdPaletteMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyEsc:
 		m.cmdPaletteMode = false
-		m.cmdPaletteFilter = ""
-		m.cmdPaletteCursor = 0
+		m.cmdPaletteInput.clear()
 		m.cmdPaletteSelected = 0
 		return m, nil
 	case tea.KeyEnter:
@@ -54,8 +53,7 @@ func (m *model) handleCmdPaletteMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if len(filtered) > 0 && m.cmdPaletteSelected < len(filtered) {
 			m.cmdPaletteMode = false
 			cmd := filtered[m.cmdPaletteSelected]
-			m.cmdPaletteFilter = ""
-			m.cmdPaletteCursor = 0
+			m.cmdPaletteInput.clear()
 			m.cmdPaletteSelected = 0
 			return cmd.action(m)
 		}
@@ -71,31 +69,8 @@ func (m *model) handleCmdPaletteMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.cmdPaletteSelected++
 		}
 		return m, nil
-	case tea.KeyLeft:
-		if msg.Alt {
-			m.cmdPaletteCursor = wordBoundaryLeft(m.cmdPaletteFilter, m.cmdPaletteCursor)
-		} else if m.cmdPaletteCursor > 0 {
-			m.cmdPaletteCursor--
-		}
-		return m, nil
-	case tea.KeyRight:
-		if msg.Alt {
-			m.cmdPaletteCursor = wordBoundaryRight(m.cmdPaletteFilter, m.cmdPaletteCursor)
-		} else if m.cmdPaletteCursor < len(m.cmdPaletteFilter) {
-			m.cmdPaletteCursor++
-		}
-		return m, nil
-	case tea.KeyBackspace:
-		if msg.Alt {
-			m.cmdPaletteFilter, m.cmdPaletteCursor = textBackspaceWord(m.cmdPaletteFilter, m.cmdPaletteCursor)
-		} else {
-			m.cmdPaletteFilter, m.cmdPaletteCursor = textBackspace(m.cmdPaletteFilter, m.cmdPaletteCursor)
-		}
-		m.cmdPaletteSelected = 0
-		return m, nil
 	default:
-		if len(msg.Runes) > 0 {
-			m.cmdPaletteFilter, m.cmdPaletteCursor = textInsert(m.cmdPaletteFilter, string(msg.Runes), m.cmdPaletteCursor)
+		if m.cmdPaletteInput.handleKey(msg) {
 			m.cmdPaletteSelected = 0
 		}
 		return m, nil
@@ -106,8 +81,7 @@ func (m *model) handleFilterMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyEsc:
 		m.filterMode = false
-		m.filter = ""
-		m.filterCursor = 0
+		m.filterInput.clear()
 		m.filterRegex = false
 		m.filterRegexErr = nil
 		m.updateFiltered()
@@ -115,39 +89,16 @@ func (m *model) handleFilterMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyEnter:
 		m.filterMode = false
 		return m, nil
-	case tea.KeyLeft:
-		if msg.Alt {
-			m.filterCursor = wordBoundaryLeft(m.filter, m.filterCursor)
-		} else if m.filterCursor > 0 {
-			m.filterCursor--
-		}
-		return m, nil
-	case tea.KeyRight:
-		if msg.Alt {
-			m.filterCursor = wordBoundaryRight(m.filter, m.filterCursor)
-		} else if m.filterCursor < len(m.filter) {
-			m.filterCursor++
-		}
-		return m, nil
-	case tea.KeyBackspace:
-		if msg.Alt {
-			m.filter, m.filterCursor = textBackspaceWord(m.filter, m.filterCursor)
-		} else {
-			m.filter, m.filterCursor = textBackspace(m.filter, m.filterCursor)
-		}
-		m.updateFiltered()
-		return m, nil
 	default:
-		if len(msg.Runes) > 0 {
-			s := string(msg.Runes)
-			if s == "/" && m.filter == "" {
-				m.filterRegex = !m.filterRegex
-				m.filterRegexErr = nil
-			} else {
-				m.filter, m.filterCursor = textInsert(m.filter, s, m.filterCursor)
-			}
+		// Special case: "/" on empty filter toggles regex mode
+		if msg.Type == tea.KeyRunes && len(msg.Runes) > 0 && string(msg.Runes) == "/" && m.filterInput.Text == "" {
+			m.filterRegex = !m.filterRegex
+			m.filterRegexErr = nil
 			m.updateFiltered()
+			return m, nil
 		}
+		m.filterInput.handleKey(msg)
+		m.updateFiltered()
 		return m, nil
 	}
 }
@@ -157,9 +108,8 @@ func (m *model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		return m.actionQuit()
 	case "esc":
-		if m.filter != "" || m.filterRegex {
-			m.filter = ""
-			m.filterCursor = 0
+		if m.filterInput.Text != "" || m.filterRegex {
+			m.filterInput.clear()
 			m.filterRegex = false
 			m.filterRegexErr = nil
 			m.updateFiltered()

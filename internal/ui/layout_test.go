@@ -23,7 +23,7 @@ func TestModelUpdateFiltered(t *testing.T) {
 	}
 
 	// Test with no filter
-	m.filter = ""
+	m.filterInput.Text = ""
 	m.updateFiltered()
 
 	if len(m.filtered) != 4 {
@@ -31,7 +31,7 @@ func TestModelUpdateFiltered(t *testing.T) {
 	}
 
 	// Test with filter
-	m.filter = "hello"
+	m.filterInput.Text = "hello"
 	m.updateFiltered()
 
 	if len(m.filtered) != 2 {
@@ -39,7 +39,7 @@ func TestModelUpdateFiltered(t *testing.T) {
 	}
 
 	// Test case insensitive
-	m.filter = "HELLO"
+	m.filterInput.Text = "HELLO"
 	m.updateFiltered()
 
 	if len(m.filtered) != 2 {
@@ -47,7 +47,7 @@ func TestModelUpdateFiltered(t *testing.T) {
 	}
 
 	// Test no matches
-	m.filter = "xyz"
+	m.filterInput.Text = "xyz"
 	m.updateFiltered()
 
 	if len(m.filtered) != 0 {
@@ -155,7 +155,7 @@ func TestUpdateFilteredPreservesOffset(t *testing.T) {
 	}
 
 	// Set initial state with offset
-	m.filter = ""
+	m.filterInput.Text = ""
 	m.updateFiltered()
 	m.offset = 50
 	m.cursor = 55
@@ -189,13 +189,13 @@ func TestUpdateFilteredClampsOffsetWhenNeeded(t *testing.T) {
 		m.lines = append(m.lines, runner.Line{Number: i, Content: "line content"})
 	}
 
-	m.filter = ""
+	m.filterInput.Text = ""
 	m.updateFiltered()
 	m.offset = 90
 	m.cursor = 95
 
 	// Now filter to fewer lines
-	m.filter = "xyz" // No matches
+	m.filterInput.Text = "xyz" // No matches
 	m.updateFiltered()
 
 	// Offset should be clamped to valid range
@@ -221,7 +221,7 @@ func TestFilterRegexMatching(t *testing.T) {
 
 	// Regex filter matching
 	m.filterRegex = true
-	m.filter = "hello.*foo"
+	m.filterInput.Text = "hello.*foo"
 	m.updateFiltered()
 	if len(m.filtered) != 1 {
 		t.Errorf("expected 1 match for regex 'hello.*foo', got %d", len(m.filtered))
@@ -231,14 +231,14 @@ func TestFilterRegexMatching(t *testing.T) {
 	}
 
 	// Regex with character class
-	m.filter = "\\d+"
+	m.filterInput.Text = "\\d+"
 	m.updateFiltered()
 	if len(m.filtered) != 1 {
 		t.Errorf("expected 1 match for regex '\\d+', got %d", len(m.filtered))
 	}
 
 	// Regex is case insensitive
-	m.filter = "HELLO"
+	m.filterInput.Text = "HELLO"
 	m.updateFiltered()
 	if len(m.filtered) != 2 {
 		t.Errorf("expected 2 matches for case-insensitive regex 'HELLO', got %d", len(m.filtered))
@@ -254,7 +254,7 @@ func TestFilterRegexInvalid(t *testing.T) {
 	}
 
 	m.filterRegex = true
-	m.filter = "[invalid"
+	m.filterInput.Text = "[invalid"
 	m.updateFiltered()
 
 	// Should have an error
@@ -268,7 +268,7 @@ func TestFilterRegexInvalid(t *testing.T) {
 	}
 
 	// Valid regex clears the error
-	m.filter = "hello"
+	m.filterInput.Text = "hello"
 	m.updateFiltered()
 	if m.filterRegexErr != nil {
 		t.Errorf("expected filterRegexErr to be nil for valid regex, got %v", m.filterRegexErr)

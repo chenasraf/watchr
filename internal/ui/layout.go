@@ -117,8 +117,8 @@ func (m *model) updateFiltered() {
 	m.filtered = []int{}
 	m.filterRegexErr = nil
 
-	if m.filterRegex && m.filter != "" {
-		re, err := regexp.Compile("(?i)" + m.filter)
+	if m.filterRegex && m.filterInput.Text != "" {
+		re, err := regexp.Compile("(?i)" + m.filterInput.Text)
 		if err != nil {
 			m.filterRegexErr = err
 			// Show all lines when regex is invalid
@@ -133,9 +133,9 @@ func (m *model) updateFiltered() {
 			}
 		}
 	} else {
-		filter := strings.ToLower(m.filter)
+		filter := strings.ToLower(m.filterInput.Text)
 		for i, line := range m.lines {
-			if m.filter == "" || strings.Contains(strings.ToLower(line.Content), filter) {
+			if m.filterInput.Text == "" || strings.Contains(strings.ToLower(line.Content), filter) {
 				m.filtered = append(m.filtered, i)
 			}
 		}

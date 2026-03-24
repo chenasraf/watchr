@@ -40,8 +40,8 @@ func TestRenderConfirmOverlay(t *testing.T) {
 func TestRenderCmdPaletteOverlay(t *testing.T) {
 	m := testModelWithLines()
 	m.cmdPaletteMode = true
-	m.cmdPaletteFilter = ""
-	m.cmdPaletteCursor = 0
+	m.cmdPaletteInput.Text = ""
+	m.cmdPaletteInput.Cursor = 0
 	m.cmdPaletteSelected = 0
 
 	box, boxWidth, boxHeight := m.renderCmdPaletteOverlay()
@@ -94,8 +94,8 @@ func TestViewWithConfirmOverlay(t *testing.T) {
 func TestViewWithCmdPalette(t *testing.T) {
 	m := testModelWithLines()
 	m.cmdPaletteMode = true
-	m.cmdPaletteFilter = ""
-	m.cmdPaletteCursor = 0
+	m.cmdPaletteInput.Text = ""
+	m.cmdPaletteInput.Cursor = 0
 
 	view := m.View()
 	if !strings.Contains(view, "Reload command") {

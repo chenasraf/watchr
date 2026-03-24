@@ -13,7 +13,7 @@ func TestCommandsCount(t *testing.T) {
 
 func TestFilteredCommandsNoFilter(t *testing.T) {
 	m := testModelWithLines()
-	m.cmdPaletteFilter = ""
+	m.cmdPaletteInput.Text = ""
 	filtered := m.filteredCommands()
 	all := commands()
 	if len(filtered) != len(all) {
@@ -23,7 +23,7 @@ func TestFilteredCommandsNoFilter(t *testing.T) {
 
 func TestFilteredCommandsWithFilter(t *testing.T) {
 	m := testModelWithLines()
-	m.cmdPaletteFilter = "reload"
+	m.cmdPaletteInput.Text = "reload"
 	filtered := m.filteredCommands()
 	// "Reload command" and "Reload & clear lines"
 	if len(filtered) != 2 {
@@ -33,7 +33,7 @@ func TestFilteredCommandsWithFilter(t *testing.T) {
 
 func TestFilteredCommandsCaseInsensitive(t *testing.T) {
 	m := testModelWithLines()
-	m.cmdPaletteFilter = "QUIT"
+	m.cmdPaletteInput.Text = "QUIT"
 	filtered := m.filteredCommands()
 	if len(filtered) != 1 {
 		t.Errorf("expected 1 command matching 'QUIT', got %d", len(filtered))

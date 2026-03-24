@@ -12,47 +12,47 @@ func TestFilterCursorMovement(t *testing.T) {
 	cfg := Config{Command: "echo test", Shell: "sh"}
 	m := testModel(cfg)
 	m.filterMode = true
-	m.filter = "hello"
-	m.filterCursor = 5
+	m.filterInput.Text = "hello"
+	m.filterInput.Cursor = 5
 
 	// Left arrow moves cursor left
 	keyMsg := tea.KeyMsg{Type: tea.KeyLeft}
 	result, _ := m.handleKeyPress(keyMsg)
 	m = result.(*model)
-	if m.filterCursor != 4 {
-		t.Errorf("expected filterCursor 4 after left, got %d", m.filterCursor)
+	if m.filterInput.Cursor != 4 {
+		t.Errorf("expected filterCursor 4 after left, got %d", m.filterInput.Cursor)
 	}
 
 	// Left again
 	result, _ = m.handleKeyPress(keyMsg)
 	m = result.(*model)
-	if m.filterCursor != 3 {
-		t.Errorf("expected filterCursor 3 after second left, got %d", m.filterCursor)
+	if m.filterInput.Cursor != 3 {
+		t.Errorf("expected filterCursor 3 after second left, got %d", m.filterInput.Cursor)
 	}
 
 	// Left doesn't go below 0
-	m.filterCursor = 0
+	m.filterInput.Cursor = 0
 	result, _ = m.handleKeyPress(keyMsg)
 	m = result.(*model)
-	if m.filterCursor != 0 {
-		t.Errorf("expected filterCursor 0 (clamped), got %d", m.filterCursor)
+	if m.filterInput.Cursor != 0 {
+		t.Errorf("expected filterCursor 0 (clamped), got %d", m.filterInput.Cursor)
 	}
 
 	// Right arrow moves cursor right
-	m.filterCursor = 2
+	m.filterInput.Cursor = 2
 	keyMsg = tea.KeyMsg{Type: tea.KeyRight}
 	result, _ = m.handleKeyPress(keyMsg)
 	m = result.(*model)
-	if m.filterCursor != 3 {
-		t.Errorf("expected filterCursor 3 after right, got %d", m.filterCursor)
+	if m.filterInput.Cursor != 3 {
+		t.Errorf("expected filterCursor 3 after right, got %d", m.filterInput.Cursor)
 	}
 
 	// Right doesn't go past end
-	m.filterCursor = 5
+	m.filterInput.Cursor = 5
 	result, _ = m.handleKeyPress(keyMsg)
 	m = result.(*model)
-	if m.filterCursor != 5 {
-		t.Errorf("expected filterCursor 5 (clamped), got %d", m.filterCursor)
+	if m.filterInput.Cursor != 5 {
+		t.Errorf("expected filterCursor 5 (clamped), got %d", m.filterInput.Cursor)
 	}
 }
 
@@ -62,94 +62,94 @@ func TestFilterAltLeftRight(t *testing.T) {
 	t.Run("alt+left jumps to previous word boundary", func(t *testing.T) {
 		m := testModel(cfg)
 		m.filterMode = true
-		m.filter = "foo bar baz"
-		m.filterCursor = 11 // end
+		m.filterInput.Text = "foo bar baz"
+		m.filterInput.Cursor = 11 // end
 
 		keyMsg := tea.KeyMsg{Type: tea.KeyLeft, Alt: true}
 		result, _ := m.handleKeyPress(keyMsg)
 		m = result.(*model)
-		if m.filterCursor != 8 {
-			t.Errorf("expected filterCursor 8, got %d", m.filterCursor)
+		if m.filterInput.Cursor != 8 {
+			t.Errorf("expected filterCursor 8, got %d", m.filterInput.Cursor)
 		}
 
 		result, _ = m.handleKeyPress(keyMsg)
 		m = result.(*model)
-		if m.filterCursor != 4 {
-			t.Errorf("expected filterCursor 4, got %d", m.filterCursor)
+		if m.filterInput.Cursor != 4 {
+			t.Errorf("expected filterCursor 4, got %d", m.filterInput.Cursor)
 		}
 
 		result, _ = m.handleKeyPress(keyMsg)
 		m = result.(*model)
-		if m.filterCursor != 0 {
-			t.Errorf("expected filterCursor 0, got %d", m.filterCursor)
+		if m.filterInput.Cursor != 0 {
+			t.Errorf("expected filterCursor 0, got %d", m.filterInput.Cursor)
 		}
 
 		// Already at start, stays at 0
 		result, _ = m.handleKeyPress(keyMsg)
 		m = result.(*model)
-		if m.filterCursor != 0 {
-			t.Errorf("expected filterCursor 0 (clamped), got %d", m.filterCursor)
+		if m.filterInput.Cursor != 0 {
+			t.Errorf("expected filterCursor 0 (clamped), got %d", m.filterInput.Cursor)
 		}
 	})
 
 	t.Run("alt+right jumps to next word boundary", func(t *testing.T) {
 		m := testModel(cfg)
 		m.filterMode = true
-		m.filter = "foo bar baz"
-		m.filterCursor = 0
+		m.filterInput.Text = "foo bar baz"
+		m.filterInput.Cursor = 0
 
 		keyMsg := tea.KeyMsg{Type: tea.KeyRight, Alt: true}
 		result, _ := m.handleKeyPress(keyMsg)
 		m = result.(*model)
-		if m.filterCursor != 4 {
-			t.Errorf("expected filterCursor 4, got %d", m.filterCursor)
+		if m.filterInput.Cursor != 4 {
+			t.Errorf("expected filterCursor 4, got %d", m.filterInput.Cursor)
 		}
 
 		result, _ = m.handleKeyPress(keyMsg)
 		m = result.(*model)
-		if m.filterCursor != 8 {
-			t.Errorf("expected filterCursor 8, got %d", m.filterCursor)
+		if m.filterInput.Cursor != 8 {
+			t.Errorf("expected filterCursor 8, got %d", m.filterInput.Cursor)
 		}
 
 		result, _ = m.handleKeyPress(keyMsg)
 		m = result.(*model)
-		if m.filterCursor != 11 {
-			t.Errorf("expected filterCursor 11, got %d", m.filterCursor)
+		if m.filterInput.Cursor != 11 {
+			t.Errorf("expected filterCursor 11, got %d", m.filterInput.Cursor)
 		}
 
 		// Already at end, stays at 11
 		result, _ = m.handleKeyPress(keyMsg)
 		m = result.(*model)
-		if m.filterCursor != 11 {
-			t.Errorf("expected filterCursor 11 (clamped), got %d", m.filterCursor)
+		if m.filterInput.Cursor != 11 {
+			t.Errorf("expected filterCursor 11 (clamped), got %d", m.filterInput.Cursor)
 		}
 	})
 
 	t.Run("alt+left skips trailing spaces", func(t *testing.T) {
 		m := testModel(cfg)
 		m.filterMode = true
-		m.filter = "foo   bar"
-		m.filterCursor = 6 // middle of spaces, before "bar"
+		m.filterInput.Text = "foo   bar"
+		m.filterInput.Cursor = 6 // middle of spaces, before "bar"
 
 		keyMsg := tea.KeyMsg{Type: tea.KeyLeft, Alt: true}
 		result, _ := m.handleKeyPress(keyMsg)
 		m = result.(*model)
-		if m.filterCursor != 0 {
-			t.Errorf("expected filterCursor 0, got %d", m.filterCursor)
+		if m.filterInput.Cursor != 0 {
+			t.Errorf("expected filterCursor 0, got %d", m.filterInput.Cursor)
 		}
 	})
 
 	t.Run("alt+right skips trailing spaces", func(t *testing.T) {
 		m := testModel(cfg)
 		m.filterMode = true
-		m.filter = "foo   bar"
-		m.filterCursor = 3 // end of "foo"
+		m.filterInput.Text = "foo   bar"
+		m.filterInput.Cursor = 3 // end of "foo"
 
 		keyMsg := tea.KeyMsg{Type: tea.KeyRight, Alt: true}
 		result, _ := m.handleKeyPress(keyMsg)
 		m = result.(*model)
-		if m.filterCursor != 6 {
-			t.Errorf("expected filterCursor 6, got %d", m.filterCursor)
+		if m.filterInput.Cursor != 6 {
+			t.Errorf("expected filterCursor 6, got %d", m.filterInput.Cursor)
 		}
 	})
 }
@@ -158,18 +158,18 @@ func TestFilterInsertAtCursor(t *testing.T) {
 	cfg := Config{Command: "echo test", Shell: "sh"}
 	m := testModel(cfg)
 	m.filterMode = true
-	m.filter = "helo"
-	m.filterCursor = 3
+	m.filterInput.Text = "helo"
+	m.filterInput.Cursor = 3
 
 	// Insert 'l' at position 3 -> "hello"
 	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}}
 	result, _ := m.handleKeyPress(keyMsg)
 	m = result.(*model)
-	if m.filter != "hello" {
-		t.Errorf("expected filter 'hello', got %q", m.filter)
+	if m.filterInput.Text != "hello" {
+		t.Errorf("expected filter 'hello', got %q", m.filterInput.Text)
 	}
-	if m.filterCursor != 4 {
-		t.Errorf("expected filterCursor 4, got %d", m.filterCursor)
+	if m.filterInput.Cursor != 4 {
+		t.Errorf("expected filterCursor 4, got %d", m.filterInput.Cursor)
 	}
 }
 
@@ -177,29 +177,29 @@ func TestFilterBackspaceAtCursor(t *testing.T) {
 	cfg := Config{Command: "echo test", Shell: "sh"}
 	m := testModel(cfg)
 	m.filterMode = true
-	m.filter = "hello"
-	m.filterCursor = 3
+	m.filterInput.Text = "hello"
+	m.filterInput.Cursor = 3
 
 	// Backspace at position 3 -> "helo"
 	keyMsg := tea.KeyMsg{Type: tea.KeyBackspace}
 	result, _ := m.handleKeyPress(keyMsg)
 	m = result.(*model)
-	if m.filter != "helo" {
-		t.Errorf("expected filter 'helo', got %q", m.filter)
+	if m.filterInput.Text != "helo" {
+		t.Errorf("expected filter 'helo', got %q", m.filterInput.Text)
 	}
-	if m.filterCursor != 2 {
-		t.Errorf("expected filterCursor 2, got %d", m.filterCursor)
+	if m.filterInput.Cursor != 2 {
+		t.Errorf("expected filterCursor 2, got %d", m.filterInput.Cursor)
 	}
 
 	// Backspace at position 0 does nothing
-	m.filterCursor = 0
+	m.filterInput.Cursor = 0
 	result, _ = m.handleKeyPress(keyMsg)
 	m = result.(*model)
-	if m.filter != "helo" {
-		t.Errorf("expected filter 'helo' (unchanged), got %q", m.filter)
+	if m.filterInput.Text != "helo" {
+		t.Errorf("expected filter 'helo' (unchanged), got %q", m.filterInput.Text)
 	}
-	if m.filterCursor != 0 {
-		t.Errorf("expected filterCursor 0, got %d", m.filterCursor)
+	if m.filterInput.Cursor != 0 {
+		t.Errorf("expected filterCursor 0, got %d", m.filterInput.Cursor)
 	}
 }
 
@@ -225,18 +225,18 @@ func TestFilterAltBackspace(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := testModel(cfg)
 			m.filterMode = true
-			m.filter = tt.filter
-			m.filterCursor = tt.cursor
+			m.filterInput.Text = tt.filter
+			m.filterInput.Cursor = tt.cursor
 
 			keyMsg := tea.KeyMsg{Type: tea.KeyBackspace, Alt: true}
 			result, _ := m.handleKeyPress(keyMsg)
 			newModel := result.(*model)
 
-			if newModel.filter != tt.expectedFilter {
-				t.Errorf("expected filter %q, got %q", tt.expectedFilter, newModel.filter)
+			if newModel.filterInput.Text != tt.expectedFilter {
+				t.Errorf("expected filter %q, got %q", tt.expectedFilter, newModel.filterInput.Text)
 			}
-			if newModel.filterCursor != tt.expectedCursor {
-				t.Errorf("expected filterCursor %d, got %d", tt.expectedCursor, newModel.filterCursor)
+			if newModel.filterInput.Cursor != tt.expectedCursor {
+				t.Errorf("expected filterCursor %d, got %d", tt.expectedCursor, newModel.filterInput.Cursor)
 			}
 		})
 	}
@@ -246,8 +246,8 @@ func TestFilterRegexToggle(t *testing.T) {
 	cfg := Config{Command: "echo test", Shell: "sh"}
 	m := testModel(cfg)
 	m.filterMode = true
-	m.filter = ""
-	m.filterCursor = 0
+	m.filterInput.Text = ""
+	m.filterInput.Cursor = 0
 
 	// Type '/' on empty filter toggles regex mode on
 	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
@@ -256,8 +256,8 @@ func TestFilterRegexToggle(t *testing.T) {
 	if !m.filterRegex {
 		t.Error("expected filterRegex to be true after typing /")
 	}
-	if m.filter != "" {
-		t.Errorf("expected empty filter, got %q", m.filter)
+	if m.filterInput.Text != "" {
+		t.Errorf("expected empty filter, got %q", m.filterInput.Text)
 	}
 
 	// Type '/' again on empty filter toggles regex mode off
@@ -269,12 +269,12 @@ func TestFilterRegexToggle(t *testing.T) {
 
 	// Type '/' when filter is non-empty adds it to filter
 	m.filterRegex = true
-	m.filter = "abc"
-	m.filterCursor = 3
+	m.filterInput.Text = "abc"
+	m.filterInput.Cursor = 3
 	result, _ = m.handleKeyPress(keyMsg)
 	m = result.(*model)
-	if m.filter != "abc/" {
-		t.Errorf("expected filter 'abc/', got %q", m.filter)
+	if m.filterInput.Text != "abc/" {
+		t.Errorf("expected filter 'abc/', got %q", m.filterInput.Text)
 	}
 	if !m.filterRegex {
 		t.Error("expected filterRegex to remain true")
@@ -285,8 +285,8 @@ func TestFilterEscClearsRegex(t *testing.T) {
 	cfg := Config{Command: "echo test", Shell: "sh"}
 	m := testModel(cfg)
 	m.filterMode = true
-	m.filter = "test"
-	m.filterCursor = 4
+	m.filterInput.Text = "test"
+	m.filterInput.Cursor = 4
 	m.filterRegex = true
 
 	// Esc in filter mode clears everything
@@ -297,11 +297,11 @@ func TestFilterEscClearsRegex(t *testing.T) {
 	if m.filterMode {
 		t.Error("expected filterMode to be false")
 	}
-	if m.filter != "" {
-		t.Errorf("expected empty filter, got %q", m.filter)
+	if m.filterInput.Text != "" {
+		t.Errorf("expected empty filter, got %q", m.filterInput.Text)
 	}
-	if m.filterCursor != 0 {
-		t.Errorf("expected filterCursor 0, got %d", m.filterCursor)
+	if m.filterInput.Cursor != 0 {
+		t.Errorf("expected filterCursor 0, got %d", m.filterInput.Cursor)
 	}
 	if m.filterRegex {
 		t.Error("expected filterRegex to be false")
@@ -661,8 +661,8 @@ func TestKeyCmdPaletteOpenAndNav(t *testing.T) {
 	keyMsg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
 	result, _ = newModel.handleKeyPress(keyMsg)
 	newModel = result.(*model)
-	if newModel.cmdPaletteFilter != "r" {
-		t.Errorf("expected cmdPaletteFilter 'r', got %q", newModel.cmdPaletteFilter)
+	if newModel.cmdPaletteInput.Text != "r" {
+		t.Errorf("expected cmdPaletteFilter 'r', got %q", newModel.cmdPaletteInput.Text)
 	}
 
 	// Esc closes palette

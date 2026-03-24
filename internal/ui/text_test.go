@@ -103,7 +103,7 @@ func TestIsAnsiTerminator(t *testing.T) {
 	}
 }
 
-func TestWordBoundaryLeft(t *testing.T) {
+func TestTextInputWordLeft(t *testing.T) {
 	tests := []struct {
 		name string
 		s    string
@@ -118,15 +118,16 @@ func TestWordBoundaryLeft(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := wordBoundaryLeft(tt.s, tt.pos)
-			if got != tt.want {
-				t.Errorf("wordBoundaryLeft(%q, %d) = %d, want %d", tt.s, tt.pos, got, tt.want)
+			ti := textInput{Text: tt.s, Cursor: tt.pos}
+			ti.wordLeft()
+			if ti.Cursor != tt.want {
+				t.Errorf("wordLeft(%q, %d) = %d, want %d", tt.s, tt.pos, ti.Cursor, tt.want)
 			}
 		})
 	}
 }
 
-func TestWordBoundaryRight(t *testing.T) {
+func TestTextInputWordRight(t *testing.T) {
 	tests := []struct {
 		name string
 		s    string
@@ -141,44 +142,88 @@ func TestWordBoundaryRight(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := wordBoundaryRight(tt.s, tt.pos)
-			if got != tt.want {
-				t.Errorf("wordBoundaryRight(%q, %d) = %d, want %d", tt.s, tt.pos, got, tt.want)
+			ti := textInput{Text: tt.s, Cursor: tt.pos}
+			ti.wordRight()
+			if ti.Cursor != tt.want {
+				t.Errorf("wordRight(%q, %d) = %d, want %d", tt.s, tt.pos, ti.Cursor, tt.want)
 			}
 		})
 	}
 }
 
-func TestTextInsert(t *testing.T) {
-	text, cursor := textInsert("helo", "l", 3)
-	if text != "hello" || cursor != 4 {
-		t.Errorf("got %q cursor %d, want 'hello' cursor 4", text, cursor)
+func TestTextInputInsert(t *testing.T) {
+	ti := textInput{Text: "helo", Cursor: 3}
+	ti.insert("l")
+	if ti.Text != "hello" || ti.Cursor != 4 {
+		t.Errorf("got %q cursor %d, want 'hello' cursor 4", ti.Text, ti.Cursor)
 	}
 }
 
-func TestTextBackspace(t *testing.T) {
-	text, cursor := textBackspace("hello", 3)
-	if text != "helo" || cursor != 2 {
-		t.Errorf("got %q cursor %d, want 'helo' cursor 2", text, cursor)
+func TestTextInputBackspace(t *testing.T) {
+	ti := textInput{Text: "hello", Cursor: 3}
+	ti.backspace()
+	if ti.Text != "helo" || ti.Cursor != 2 {
+		t.Errorf("got %q cursor %d, want 'helo' cursor 2", ti.Text, ti.Cursor)
 	}
 
 	// At start, no change
-	text, cursor = textBackspace("hello", 0)
-	if text != "hello" || cursor != 0 {
-		t.Errorf("got %q cursor %d, want 'hello' cursor 0", text, cursor)
+	ti = textInput{Text: "hello", Cursor: 0}
+	ti.backspace()
+	if ti.Text != "hello" || ti.Cursor != 0 {
+		t.Errorf("got %q cursor %d, want 'hello' cursor 0", ti.Text, ti.Cursor)
 	}
 }
 
-func TestTextBackspaceWord(t *testing.T) {
-	text, cursor := textBackspaceWord("hello world", 11)
-	if text != "hello " || cursor != 6 {
-		t.Errorf("got %q cursor %d, want 'hello ' cursor 6", text, cursor)
+func TestTextInputBackspaceWord(t *testing.T) {
+	ti := textInput{Text: "hello world", Cursor: 11}
+	ti.backspaceWord()
+	if ti.Text != "hello " || ti.Cursor != 6 {
+		t.Errorf("got %q cursor %d, want 'hello ' cursor 6", ti.Text, ti.Cursor)
 	}
 
 	// At start, no change
-	text, cursor = textBackspaceWord("hello", 0)
-	if text != "hello" || cursor != 0 {
-		t.Errorf("got %q cursor %d, want 'hello' cursor 0", text, cursor)
+	ti = textInput{Text: "hello", Cursor: 0}
+	ti.backspaceWord()
+	if ti.Text != "hello" || ti.Cursor != 0 {
+		t.Errorf("got %q cursor %d, want 'hello' cursor 0", ti.Text, ti.Cursor)
+	}
+}
+
+func TestTextInputRender(t *testing.T) {
+	// Cursor in middle — character visible with inverted style
+	ti := textInput{Text: "test", Cursor: 2}
+	before, cursor, after := ti.render()
+	if before != "te" {
+		t.Errorf("before = %q, want 'te'", before)
+	}
+	if after != "t" {
+		t.Errorf("after = %q, want 't'", after)
+	}
+	// Cursor should contain the character 's' (with ANSI styling)
+	if !strings.Contains(cursor, "s") {
+		t.Errorf("cursor should contain 's', got %q", cursor)
+	}
+
+	// Cursor at end — styled space
+	ti = textInput{Text: "test", Cursor: 4}
+	before, cursor, after = ti.render()
+	if before != "test" {
+		t.Errorf("before = %q, want 'test'", before)
+	}
+	if after != "" {
+		t.Errorf("after = %q, want ''", after)
+	}
+	// Cursor should contain a space (with ANSI styling)
+	if !strings.Contains(cursor, " ") {
+		t.Errorf("cursor should contain space, got %q", cursor)
+	}
+}
+
+func TestTextInputClear(t *testing.T) {
+	ti := textInput{Text: "hello", Cursor: 3}
+	ti.clear()
+	if ti.Text != "" || ti.Cursor != 0 {
+		t.Errorf("after clear: text=%q cursor=%d", ti.Text, ti.Cursor)
 	}
 }
 

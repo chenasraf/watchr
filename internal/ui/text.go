@@ -3,6 +3,7 @@ package ui
 import (
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -242,48 +243,143 @@ func skipVisualWidth(s string, skipWidth int) string {
 	return result.String()
 }
 
-// wordBoundaryLeft returns the cursor position after jumping left to the previous word boundary.
-func wordBoundaryLeft(s string, pos int) int {
-	for pos > 0 && s[pos-1] == ' ' {
+// textInput is a reusable single-line text editor with cursor, word navigation,
+// and block-cursor rendering.
+type textInput struct {
+	Text   string
+	Cursor int
+}
+
+func (ti *textInput) clear() {
+	ti.Text = ""
+	ti.Cursor = 0
+}
+
+// handleKey processes a key message for text editing (left/right, backspace,
+// character insert). Returns true if the key was handled.
+func (ti *textInput) handleKey(msg tea.KeyMsg) bool {
+	switch msg.Type {
+	case tea.KeyLeft:
+		if msg.Alt {
+			ti.wordLeft()
+		} else if ti.Cursor > 0 {
+			ti.Cursor--
+		}
+	case tea.KeyRight:
+		if msg.Alt {
+			ti.wordRight()
+		} else if ti.Cursor < len(ti.Text) {
+			ti.Cursor++
+		}
+	case tea.KeyBackspace:
+		if msg.Alt {
+			ti.backspaceWord()
+		} else {
+			ti.backspace()
+		}
+	case tea.KeyCtrlW:
+		// Ctrl+W deletes word (also sent by some terminals for Alt+Backspace)
+		ti.backspaceWord()
+	case tea.KeyDelete:
+		if msg.Alt {
+			ti.deleteWord()
+		} else {
+			ti.delete()
+		}
+	case tea.KeyHome, tea.KeyCtrlA:
+		ti.Cursor = 0
+	case tea.KeyEnd, tea.KeyCtrlE:
+		ti.Cursor = len(ti.Text)
+	default:
+		if len(msg.Runes) > 0 {
+			ti.insert(string(msg.Runes))
+		} else {
+			return false
+		}
+	}
+	return true
+}
+
+func (ti *textInput) delete() {
+	if ti.Cursor < len(ti.Text) {
+		ti.Text = ti.Text[:ti.Cursor] + ti.Text[ti.Cursor+1:]
+	}
+}
+
+func (ti *textInput) deleteWord() {
+	if ti.Cursor >= len(ti.Text) {
+		return
+	}
+	pos := ti.Cursor
+	for pos < len(ti.Text) && ti.Text[pos] == ' ' {
+		pos++
+	}
+	for pos < len(ti.Text) && ti.Text[pos] != ' ' {
+		pos++
+	}
+	ti.Text = ti.Text[:ti.Cursor] + ti.Text[pos:]
+}
+
+func (ti *textInput) insert(s string) {
+	ti.Text = ti.Text[:ti.Cursor] + s + ti.Text[ti.Cursor:]
+	ti.Cursor += len(s)
+}
+
+func (ti *textInput) backspace() {
+	if ti.Cursor > 0 {
+		ti.Text = ti.Text[:ti.Cursor-1] + ti.Text[ti.Cursor:]
+		ti.Cursor--
+	}
+}
+
+func (ti *textInput) backspaceWord() {
+	if ti.Cursor <= 0 {
+		return
+	}
+	newPos := ti.wordBoundaryLeft()
+	ti.Text = ti.Text[:newPos] + ti.Text[ti.Cursor:]
+	ti.Cursor = newPos
+}
+
+func (ti *textInput) wordLeft() {
+	ti.Cursor = ti.wordBoundaryLeft()
+}
+
+func (ti *textInput) wordRight() {
+	pos := ti.Cursor
+	for pos < len(ti.Text) && ti.Text[pos] != ' ' {
+		pos++
+	}
+	for pos < len(ti.Text) && ti.Text[pos] == ' ' {
+		pos++
+	}
+	ti.Cursor = pos
+}
+
+func (ti *textInput) wordBoundaryLeft() int {
+	pos := ti.Cursor
+	for pos > 0 && ti.Text[pos-1] == ' ' {
 		pos--
 	}
-	for pos > 0 && s[pos-1] != ' ' {
+	for pos > 0 && ti.Text[pos-1] != ' ' {
 		pos--
 	}
 	return pos
 }
 
-// wordBoundaryRight returns the cursor position after jumping right to the next word boundary.
-func wordBoundaryRight(s string, pos int) int {
-	for pos < len(s) && s[pos] != ' ' {
-		pos++
+// render returns (before, cursor, after) where cursor is the character at the
+// cursor position styled with an inverted background so it remains visible.
+// At end of text, a space with inverted background is used.
+func (ti *textInput) render() (before, cursor, after string) {
+	cursorStyle := lipgloss.NewStyle().Reverse(true)
+	before = ti.Text[:ti.Cursor]
+	if ti.Cursor < len(ti.Text) {
+		cursor = cursorStyle.Render(string(ti.Text[ti.Cursor]))
+		after = ti.Text[ti.Cursor+1:]
+	} else {
+		cursor = cursorStyle.Render(" ")
 	}
-	for pos < len(s) && s[pos] == ' ' {
-		pos++
-	}
-	return pos
-}
-
-// textInsert inserts a string at the cursor position, returning new text and cursor.
-func textInsert(text, insert string, cursor int) (string, int) {
-	return text[:cursor] + insert + text[cursor:], cursor + len(insert)
-}
-
-// textBackspace deletes one character before the cursor, returning new text and cursor.
-func textBackspace(text string, cursor int) (string, int) {
-	if cursor <= 0 {
-		return text, cursor
-	}
-	return text[:cursor-1] + text[cursor:], cursor - 1
-}
-
-// textBackspaceWord deletes the word before the cursor, returning new text and cursor.
-func textBackspaceWord(text string, cursor int) (string, int) {
-	if cursor <= 0 {
-		return text, cursor
-	}
-	newPos := wordBoundaryLeft(text, cursor)
-	return text[:newPos] + text[cursor:], newPos
+	return before, cursor, after
 }
 
 func isAnsiTerminator(r rune) bool {

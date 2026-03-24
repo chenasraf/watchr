@@ -95,7 +95,7 @@ func (m *model) actionGoToLast() (tea.Model, tea.Cmd) {
 
 func (m *model) actionEnterFilter() (tea.Model, tea.Cmd) {
 	m.filterMode = true
-	m.filterCursor = len(m.filter)
+	m.filterInput.Cursor = len(m.filterInput.Text)
 	return m, nil
 }
 
@@ -103,7 +103,7 @@ func (m *model) actionToggleRegexFilter() (tea.Model, tea.Cmd) {
 	m.filterMode = true
 	m.filterRegex = !m.filterRegex
 	m.filterRegexErr = nil
-	m.filterCursor = len(m.filter)
+	m.filterInput.Cursor = len(m.filterInput.Text)
 	m.updateFiltered()
 	return m, nil
 }
@@ -141,8 +141,7 @@ func (m *model) actionQuit() (tea.Model, tea.Cmd) {
 
 func (m *model) actionOpenPalette() (tea.Model, tea.Cmd) {
 	m.cmdPaletteMode = true
-	m.cmdPaletteFilter = ""
-	m.cmdPaletteCursor = 0
+	m.cmdPaletteInput.clear()
 	m.cmdPaletteSelected = 0
 	return m, nil
 }

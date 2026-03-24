@@ -24,7 +24,6 @@ func initialModel(cfg Config) model {
 		filtered:    []int{},
 		cursor:      0,
 		offset:      0,
-		filter:      "",
 		filterMode:  false,
 		showPreview: false,
 		runner:      r,

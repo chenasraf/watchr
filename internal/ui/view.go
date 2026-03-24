@@ -41,9 +41,8 @@ func (m model) renderCmdPaletteOverlay() (box string, boxWidth, boxHeight int) {
 	var content strings.Builder
 
 	// Filter input with bottom border
-	before := m.cmdPaletteFilter[:m.cmdPaletteCursor]
-	after := m.cmdPaletteFilter[m.cmdPaletteCursor:]
-	filterLine := filterStyle.Render(":"+before) + "█" + filterStyle.Render(after)
+	before, block, after := m.cmdPaletteInput.render()
+	filterLine := filterStyle.Render(":"+before) + block + filterStyle.Render(after)
 	// Pad filter line to full width
 	filterVisual := lipgloss.Width(filterLine)
 	if filterVisual < paletteWidth {
@@ -339,21 +338,19 @@ func (m model) renderPromptLine() string {
 	switch {
 	case m.filterMode && m.filterRegex:
 		label := filterRegexStyle.Render("regex/")
-		before := m.filter[:m.filterCursor]
-		after := m.filter[m.filterCursor:]
-		input := filterStyle.Render(before) + "█" + filterStyle.Render(after)
+		before, block, after := m.filterInput.render()
+		input := filterStyle.Render(before) + block + filterStyle.Render(after)
 		promptLine = label + input
 		if m.filterRegexErr != nil {
 			promptLine += " " + filterErrStyle.Render("(invalid regex)")
 		}
 	case m.filterMode:
-		before := m.filter[:m.filterCursor]
-		after := m.filter[m.filterCursor:]
-		promptLine = filterStyle.Render("/"+before) + "█" + filterStyle.Render(after)
-	case m.filter != "" && m.filterRegex:
-		promptLine = promptStyle.Render(fmt.Sprintf("%s (regex: %s)", m.config.Prompt, m.filter))
-	case m.filter != "":
-		promptLine = promptStyle.Render(fmt.Sprintf("%s (filter: %s)", m.config.Prompt, m.filter))
+		before, block, after := m.filterInput.render()
+		promptLine = filterStyle.Render("/"+before) + block + filterStyle.Render(after)
+	case m.filterInput.Text != "" && m.filterRegex:
+		promptLine = promptStyle.Render(fmt.Sprintf("%s (regex: %s)", m.config.Prompt, m.filterInput.Text))
+	case m.filterInput.Text != "":
+		promptLine = promptStyle.Render(fmt.Sprintf("%s (filter: %s)", m.config.Prompt, m.filterInput.Text))
 	default:
 		promptLine = promptStyle.Render(m.config.Prompt)
 	}

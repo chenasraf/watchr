@@ -37,11 +37,10 @@ type Config struct {
 type model struct {
 	config            Config
 	lines             []runner.Line
-	filtered          []int // indices into lines that match filter
-	cursor            int   // cursor position in filtered list
-	offset            int   // scroll offset for visible window
-	filter            string
-	filterCursor      int // cursor position within filter string
+	filtered          []int     // indices into lines that match filter
+	cursor            int       // cursor position in filtered list
+	offset            int       // scroll offset for visible window
+	filterInput       textInput // filter text and cursor
 	filterMode        bool
 	filterRegex       bool  // true when filter is in regex mode
 	filterRegexErr    error // non-nil when regex pattern is invalid
@@ -65,10 +64,9 @@ type model struct {
 	statusMsg         string // temporary status message (e.g., "Yanked!")
 	exitCode          int    // last command exit code
 
-	cmdPaletteMode     bool   // whether command palette is open
-	cmdPaletteFilter   string // current filter text
-	cmdPaletteCursor   int    // cursor position within filter string
-	cmdPaletteSelected int    // selected item index in filtered list
+	cmdPaletteMode     bool      // whether command palette is open
+	cmdPaletteInput    textInput // palette filter text and cursor
+	cmdPaletteSelected int       // selected item index in filtered list
 
 	confirmMode    bool   // whether a confirmation dialog is visible
 	confirmMessage string // message to display in confirmation dialog

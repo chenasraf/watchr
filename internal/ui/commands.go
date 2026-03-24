@@ -41,10 +41,10 @@ func commands() []command {
 // filteredCommands returns commands matching the current palette filter.
 func (m *model) filteredCommands() []command {
 	all := commands()
-	if m.cmdPaletteFilter == "" {
+	if m.cmdPaletteInput.Text == "" {
 		return all
 	}
-	filter := strings.ToLower(m.cmdPaletteFilter)
+	filter := strings.ToLower(m.cmdPaletteInput.Text)
 	var result []command
 	for _, c := range all {
 		if strings.Contains(strings.ToLower(c.name), filter) {

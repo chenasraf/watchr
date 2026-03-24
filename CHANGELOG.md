@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.10.0](https://github.com/chenasraf/watchr/compare/v1.9.0...v1.10.0) (2026-03-24)
+
+
+### Features
+
+* add reload+clear, delete line, delete all lines ([c4e4d5d](https://github.com/chenasraf/watchr/commit/c4e4d5d0de6bd31db1093c6dd7c67067c7277f23))
+
+
+### Bug Fixes
+
+* home/end navigation ([351aa03](https://github.com/chenasraf/watchr/commit/351aa0331bfdab61b69d63b46911de21b1feea90))
+* text cursor visual ([351aa03](https://github.com/chenasraf/watchr/commit/351aa0331bfdab61b69d63b46911de21b1feea90))
+* text delete word ([351aa03](https://github.com/chenasraf/watchr/commit/351aa0331bfdab61b69d63b46911de21b1feea90))
+* unify all text input behavior, fix cursor navigations ([351aa03](https://github.com/chenasraf/watchr/commit/351aa0331bfdab61b69d63b46911de21b1feea90))
+
 ## [1.9.0](https://github.com/chenasraf/watchr/compare/v1.8.0...v1.9.0) (2026-03-16)
 
 

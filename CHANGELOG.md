@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.1](https://github.com/chenasraf/watchr/compare/v1.10.0...v1.10.1) (2026-05-04)
+
+
+### Bug Fixes
+
+* command re-running caused early line truncating ([6a2df0a](https://github.com/chenasraf/watchr/commit/6a2df0a15d4df8f3e002faef5f2f822c2e0dc772))
+
 ## [1.10.0](https://github.com/chenasraf/watchr/compare/v1.9.0...v1.10.0) (2026-03-24)
 
 

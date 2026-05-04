@@ -70,7 +70,9 @@ func (m *model) startStreaming() tea.Cmd {
 	m.streamResult = m.runner.RunStreaming(m.ctx, m.lines)
 	m.streaming = true
 	m.loading = true
-	m.lastLineCount = len(m.lines)
+	// lastLineCount tracks the streamResult's CurrentLineCount (lines produced
+	// by the current run), which starts at 0 for a fresh streaming result.
+	m.lastLineCount = 0
 	m.exitCode = -1
 	m.errorMsg = ""
 	m.userScrolled = false
@@ -116,16 +118,23 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Check for new lines
-		newLines := m.streamResult.GetLines()
-		newCount := len(newLines)
+		isDone := m.streamResult.IsDone()
+		currentCount := m.streamResult.GetCurrentLineCount()
 
-		if newCount != m.lastLineCount {
+		// Sync m.lines whenever the stream has produced new line writes since
+		// the last tick (in-place edits and appends both bump CurrentLineCount),
+		// or once on completion so the trim-to-currentCount path runs.
+		if currentCount != m.lastLineCount || isDone {
+			newLines := m.streamResult.GetLines()
+			// On completion, drop any leftover slots that the new run never
+			// wrote into — they still hold previous-run content.
+			if isDone && currentCount < len(newLines) {
+				newLines = newLines[:currentCount]
+			}
 			m.lines = newLines
-			m.lastLineCount = newCount
+			m.lastLineCount = currentCount
 			m.updateFiltered()
 
-			// Auto-scroll to bottom if user hasn't manually scrolled
 			if !m.userScrolled {
 				visible := m.visibleLines()
 				if visible > 0 {
@@ -135,20 +144,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Check if command completed
-		if m.streamResult.IsDone() {
+		if isDone {
 			m.streaming = false
 			m.loading = false
 			m.exitCode = m.streamResult.ExitCode
 			if m.streamResult.Error != nil {
 				m.errorMsg = m.streamResult.Error.Error()
-			}
-
-			// Trim excess lines from previous run
-			currentCount := m.streamResult.GetCurrentLineCount()
-			if currentCount < len(m.lines) {
-				m.lines = m.lines[:currentCount]
-				m.updateFiltered()
 			}
 
 			// If auto-refresh is enabled and timer starts from end, schedule the next run

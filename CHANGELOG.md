@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.10.2](https://github.com/chenasraf/watchr/compare/v1.10.1...v1.10.2) (2026-10-23)
+
+
+### Bug Fixes
+
+* **deps:** require go 1.26.10 ([502eb6b](https://github.com/chenasraf/watchr/commit/502eb6b23332a4d479bc7a5b944b8bf87a25ff83))
+* **deps:** require go 1.27.3 ([cd4065c](https://github.com/chenasraf/watchr/commit/cd4065c608c90090aee37df3d0ef5a47f2df8938))
+
 ## [1.10.1](https://github.com/chenasraf/watchr/compare/v1.10.0...v1.10.1) (2026-05-04)
 
 
